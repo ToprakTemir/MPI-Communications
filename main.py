@@ -26,7 +26,7 @@ class Water(Unit):
 
 class Air(Unit):
     def __init__(self):
-        self.attack_directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)] # not exact, scale will be applied in handle_special_skills function
+        self.attack_directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
         super().__init__("A", 10, 2, 2, self.attack_directions)
 
 class Pixel:
@@ -50,7 +50,7 @@ class Grid:
         self.num_water = 0
         self.num_earth = 0
 
-        # map from (x, y) to unit pointer
+        # map from (row, column) to unit pointer
         self.air_units = {}
         self.fire_units = {}
         self.water_units = {}
@@ -69,7 +69,10 @@ class Grid:
         return ret
 
     def get(self, i, j):
-        return self.grid[i][j]
+        if 0 <= i < self.n and 0 <= j < self.n:
+            return self.grid[i][j]
+        else:
+            return -1
 
     def set(self, i, j, pixel):
         self.grid[i][j] = pixel
@@ -125,8 +128,10 @@ def get_worker_borders(worker_rank, num_workers, n):
 
     worker_rank -= 1 # so that x and y values start from 0
 
-    worker_x = worker_rank % num_workers
-    worker_y = worker_rank // num_workers
+    num_workers_per_row = int(num_workers ** 0.5)
+
+    worker_x = worker_rank % num_workers_per_row
+    worker_y = worker_rank // num_workers_per_row
 
     left_boundary = worker_x * n
     right_boundary = (worker_x + 1) * n  # exclusive
@@ -135,49 +140,256 @@ def get_worker_borders(worker_rank, num_workers, n):
 
     return left_boundary, right_boundary, top_boundary, bottom_boundary
 
-def send_grid_to_neighbors(grid, rank, num_workers, comm):
+def send_to_horizontal_neighbors(data, rank, num_workers, comm):
     """
+    :param grid: the grid that will be sent to neighbors
     :param rank: the rank of the process
     :param num_workers: the total number of workers
-    :param n: the number of lines each worker will be responsible
-    :param grid: the grid that will be sent to neighbors
     :param comm: the communicator object
     :return: None
     """
 
-    if not rank % num_workers_per_row == 0:  # check if rightmost process
-        comm.send(grid, dest=rank + 1)
-    if not rank % num_workers_per_row == 1:  # check if leftmost process
-        comm.send(grid, dest=rank - 1)
-    if not rank > num_workers - num_workers_per_row:
-        comm.send(grid, dest=rank + num_workers_per_row)
-    if not rank <= num_workers_per_row:
-        comm.send(grid, dest=rank - num_workers_per_row)
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
 
-def receive_grid_from_neighbors(rank, num_workers, n, comm):
+    if not rank % num_workers_per_row == 0:  # check if leftmost process
+        comm.send(data[0], dest=rank - 1)
+
+    if not rank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+        comm.send(data[1], dest=rank + 1)
+    
+
+def send_to_vertical_neighbors(data, rank, num_workers, comm):
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
+
+    if not rank < num_workers_per_row:
+        comm.send(data[0], dest=rank - num_workers_per_row)
+    if not rank >= num_workers - num_workers_per_row:
+        comm.send(data[1], dest=rank + num_workers_per_row)
+    
+
+def send_to_cross_neighbors(data, rank, num_workers, comm):
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
+
+    if not rank % num_workers_per_row == 0 and not rank < num_workers_per_row:
+        comm.send(data[0], dest=rank - num_workers_per_row - 1)
+    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank < num_workers_per_row:
+        comm.send(data[1], dest=rank - num_workers_per_row + 1)
+    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank >= num_workers - num_workers_per_row:
+        comm.send(data[2], dest=rank + num_workers_per_row + 1)
+    if not rank % num_workers_per_row == 0 and not rank >= num_workers - num_workers_per_row:
+        comm.send(data[3], dest=rank + num_workers_per_row - 1)
+    
+    
+
+
+def receive_from_horizontal_neighbors(rank, num_workers, comm):
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
+
+    left_data = None
+    right_data = None
+
+    if not rank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+        right_data = comm.recv(source=rank + 1)
+    if not rank % num_workers_per_row == 0:  # check if leftmost process
+        left_data = comm.recv(source=rank - 1)
+
+    return left_data, right_data
+
+def receive_from_vertical_neighbors(rank, num_workers, comm):
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
+
+    top_data = None
+    bottom_data = None
+
+    if not rank >= num_workers - num_workers_per_row:
+        bottom_data = comm.recv(source=rank + num_workers_per_row)
+    if not rank < num_workers_per_row:
+        top_data = comm.recv(source=rank - num_workers_per_row)
+
+    return top_data, bottom_data
+
+def receive_from_cross_neighbors(rank, num_workers, comm):
+    num_workers_per_row = int(num_workers ** 0.5)
+    rank = rank - 1  # only the worker ranks are considered
+
+    top_left_data = None
+    top_right_data = None
+    bottom_left_data = None
+    bottom_right_data = None
+
+    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank >= num_workers - num_workers_per_row:
+        bottom_right_data = comm.recv(source=rank + num_workers_per_row + 1)
+    if not rank % num_workers_per_row == 0 and not rank < num_workers_per_row:
+        top_left_data = comm.recv(source=rank - num_workers_per_row - 1)
+    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank < num_workers_per_row:
+        top_right_data = comm.recv(source=rank - num_workers_per_row + 1)
+    if not rank % num_workers_per_row == 0 and not rank >= num_workers - num_workers_per_row:
+        bottom_left_data = comm.recv(source=rank + num_workers_per_row - 1)
+
+    return top_left_data, top_right_data, bottom_left_data, bottom_right_data
+
+
+def point_letter(row, column):
+    l = ["AB", "CD"]
+    return l[row%2][column%2]
+    
+
+def communicate(data, rank, num_workers, comm):
     """
+    :param data: the grid that will be sent to neighbors, ordered as [upperleft, up, upperright, left, right, lowerleft, down, lowerright]
+    :param rank: the rank of the process
+    :param num_workers: the total number of workers
+    :param comm: the communicator object
+    :return: the received data from neighbors, ordered as [upperleft, up, upperright, left, right, lowerleft, down, lowerright]
+    """
+
+    num_workers_per_row = int(num_workers ** 0.5)
+    process_row = rank // num_workers_per_row
+    process_col = rank % num_workers_per_row
+    
+    
+
+    if point_letter(process_row, process_col) == "A":
+        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
+        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
+        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+
+        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
+        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+
+    elif point_letter(process_row, process_col) == "B":
+        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
+
+        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
+        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
+        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+
+        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+
+    elif point_letter(process_row, process_col) == "C":
+        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+
+        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
+        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
+        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+
+        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
+
+    elif point_letter(process_row, process_col) == "D":
+        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
+        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+
+        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
+        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
+        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+
+    return cross_neighbor_data[0], vertical_neighbor_data[0], cross_neighbor_data[1], horizontal_neighbor_data[0], horizontal_neighbor_data[1], cross_neighbor_data[2], vertical_neighbor_data[1], cross_neighbor_data[3] 
+
+def merge_grids(own_grid, data, rank, num_workers, n):
+    """
+    :param data: the received data from neighbors, ordered as [upperleft, up, upperright, left, right, lowerleft, down, lowerright]
     :param rank: the rank of the process
     :param num_workers: the total number of workers
     :param n: the number of lines each worker will be responsible
-    :param comm: the communicator object
-    :return: (left_extra_grid, right_extra_grid, top_extra_grid, bottom_extra_grid) the extra information from neighbors
+    :return: the merged grid
     """
 
-    left_extra_grid = None
-    right_extra_grid = None
-    top_extra_grid = None
-    bottom_extra_grid = None
+    merged_grid = Grid(3*n)
 
-    if not rank % num_workers_per_row == 0:  # check if rightmost process
-        right_extra_grid = comm.recv(source=rank + 1)
-    if not rank % num_workers_per_row == 1:  # check if leftmost process
-        left_extra_grid = comm.recv(source=rank - 1)
-    if not rank > num_workers - num_workers_per_row:
-        bottom_extra_grid = comm.recv(source=rank + num_workers_per_row)
-    if not rank <= num_workers_per_row:
-        top_extra_grid = comm.recv(source=rank - num_workers_per_row)
+    for i in range(n):
+        for j in range(n):
+            merged_grid.set(i, j, data[0].get(i, j))
+        for j in range(n, 2*n):
+            merged_grid.set(i, j, data[1].get(i, j - n))
+        for j in range(2*n, 3*n):
+            merged_grid.set(i, j, data[2].get(i, j - 2*n))
 
-    return left_extra_grid, right_extra_grid, top_extra_grid, bottom_extra_grid
+    for i in range(n, 2*n):
+        for j in range(n):
+            merged_grid.set(i, j, data[3].get(i - n, j))
+        for j in range(n, 2*n):
+            merged_grid.set(i, j, own_grid.get(i - n, j - n))
+        for j in range(2*n, 3*n):
+            merged_grid.set(i, j, data[4].get(i - n, j - 2*n))
+
+    for i in range(2*n, 3*n):
+        for j in range(n):
+            merged_grid.set(i, j, data[5].get(i - 2*n, j))
+        for j in range(n, 2*n):
+            merged_grid.set(i, j, data[6].get(i - 2*n, j - n))
+        for j in range(2*n, 3*n):
+            merged_grid.set(i, j, data[7].get(i - 2*n, j - 2*n))
+    
+
+
+    return merged_grid
+
+def handle_air_movement(grid, air_unit_coords, n):
+    """
+    Handles the movement phase for Air units
+    Returns a list of movement decisions to be applied simultaneously
+    """
+    movement_decisions = []  # List of (from_coord, to_coord) tuples
+    
+    for coord in air_unit_coords:
+        best_position = coord
+        max_attackable = count_attackable_enemies(grid, coord, n)
+        
+        pixel = grid.get(coord[0], coord[1])
+        # Check all possible movement directions
+        for dx, dy in pixel.unit.attack_directions:
+            new_x = coord[0] + dx
+            new_y = coord[1] + dy
+            
+            if 0 <= new_x < n and 0 <= new_y < n and grid.get(new_x, new_y) is None:
+                attackable = count_attackable_enemies(grid, (new_x, new_y), n)
+                
+                if attackable > max_attackable:
+                    max_attackable = attackable
+                    best_position = (new_x, new_y)
+                elif attackable == max_attackable and attackable > count_attackable_enemies(grid, coord, n):
+                    if new_x < best_position[0] or (new_x == best_position[0] and new_y < best_position[1]):
+                        best_position = (new_x, new_y)
+        
+        if best_position != coord:
+            movement_decisions.append((coord, best_position))
+    
+    return movement_decisions
+
+def count_attackable_enemies(grid, coord, n):
+    """
+    Counts how many enemy units an Air unit can attack from the given position
+    """
+    count = 0
+    pixel = grid.get(coord[0], coord[1])
+    if pixel is None or pixel.unit.type != 'A':
+        return 0
+        
+    # Check all directions including diagonals
+    for drow, dcol in pixel.unit.attack_directions:
+        row = coord[0] + drow
+        col = coord[1] + dcol
+        
+        if 0 <= row < n and 0 <= col < n:
+            if grid.get(row, col) is not None and grid.get(row, col).unit.type != 'A':
+                count += 1
+            elif grid.get(row, col) is None:
+                row += drow
+                col += dcol
+                if 0 <= row < n and 0 <= col < n and grid.get(row, col) is not None and grid.get(row, col).unit.type != 'A':
+                    count += 1
+                    
+    return count
+
 
 if __name__ == "__main__":
 
@@ -294,30 +506,20 @@ if __name__ == "__main__":
                 extra_top_needed = max(extra_top_needed, 3 - coord[0])
                 extra_bottom_needed = max(extra_bottom_needed, 3 - (n - 1 - coord[0]))
 
-            process_row = umut
-            process_col = umut
+            process_row = rank // num_workers_per_row
+            process_col = rank % num_workers_per_row
 
             # process communication round
             # every process sends its grid information to all neighbors to avoid unnecessary waiting at either send or recv
-            # unused extra info is then set to None
-            if (process_row + process_col) % 2 == 0: # receive first, then send
+            
+            data = [worker_grid for _ in range(8)]
+            incoming_data = communicate(data, rank, num_workers, comm)
+            extended_grid = merge_grids(worker_grid, incoming_data, rank, num_workers, n)
 
-                left_extra_grid, right_extra_grid, top_extra_grid, bottom_extra_grid = receive_grid_from_neighbors(rank, num_workers, n, comm)
-                send_grid_to_neighbors(worker_grid, rank, num_workers, comm)
-
-            else: # send first, then receive
-
-                send_grid_to_neighbors(worker_grid, rank, num_workers, comm)
-                left_extra_grid, right_extra_grid, top_extra_grid, bottom_extra_grid = receive_grid_from_neighbors(rank, num_workers, n, comm)
-
-            if extra_left_needed == 0:
-                left_extra_grid = None
-            if extra_right_needed == 0:
-                right_extra_grid = None
-            if extra_top_needed == 0:
-                top_extra_grid = None
-            if extra_bottom_needed == 0:
-                bottom_extra_grid = None
+            # 1. Movement Phase (Air Units)
+            air_unit_coords = list(extended_grid.air_units.keys())
+            movement_decisions = handle_air_movement(extended_grid, air_unit_coords, extended_grid.n)
+            
 
 
 
