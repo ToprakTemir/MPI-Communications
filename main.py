@@ -7,27 +7,41 @@ class Unit:
         self.health = health
         self.attack = attack
         self.heal_rate = heal_rate
-        self.attack_directions = []
+        self.attack_directions = attack_directions
 
-class Earth(Unit):
-    def __init__(self):
-        self.attack_directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        super().__init__("E", 18, 2, 3, self.attack_directions)
+# unit stats
+EARTH_HP = 18
+EARTH_ATTACK = 2
+EARTH_HEAL_RATE = 3
+EARTH_ATTACK_DIRECTIONS = [(0, 1), (1, 0), (0, -1), (-1, 0)]
 
-class Fire(Unit):
-    def __init__(self):
-        self.attack_directions = [(1, 1), (1, 0), (1, -1), (0, 1), (0, -1), (-1, 1), (-1, 0), (-1, -1)]
-        super().__init__("F", 12, 4, 1, self.attack_directions)
+FIRE_HP = 12
+FIRE_ATTACK = 4
+FIRE_HEAL_RATE = 1
+FIRE_ATTACK_DIRECTIONS = [(1, 1), (1, 0), (1, -1), (0, 1), (0, -1), (-1, 1), (-1, 0), (-1, -1)]
 
-class Water(Unit):
-    def __init__(self):
-        self.attack_directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-        super().__init__("W", 14, 3, 2, self.attack_directions)
+WATER_HP = 14
+WATER_ATTACK = 3
+WATER_HEAL_RATE = 2
+WATER_ATTACK_DIRECTIONS = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
-class Air(Unit):
-    def __init__(self):
-        self.attack_directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
-        super().__init__("A", 10, 2, 2, self.attack_directions)
+AIR_HP = 10
+AIR_ATTACK = 2
+AIR_HEAL_RATE = 2
+AIR_ATTACK_DIRECTIONS = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
+
+def init_earth():
+    return Unit("E", 18, 2, 3, [(0, 1), (1, 0), (0, -1), (-1, 0)])
+
+def init_fire():
+    return Unit("F", 12, 4, 1, [(1, 1), (1, 0), (1, -1), (0, 1), (0, -1), (-1, 1), (-1, 0), (-1, -1)])
+
+def init_water():
+    return Unit("W", 14, 3, 2, [(1, 1), (1, -1), (-1, 1), (-1, -1)])
+
+def init_air():
+    attack_directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
+    return Unit("A", 10, 2, 2, attack_directions)
 
 class Pixel:
     def __init__(self, unit):
@@ -109,15 +123,13 @@ class Grid:
 
 def create_unit(unit_type):
     if unit_type == "E":
-        return Earth()
+        return init_earth()
     elif unit_type == "F":
-        return Fire()
+        return init_fire()
     elif unit_type == "W":
-        return Water()
+        return init_water()
     elif unit_type == "A":
-        return Air()
-    else:
-        return None
+        return init_air()
 
 def get_worker_borders(worker_rank, num_workers, n):
     """
@@ -237,6 +249,11 @@ def receive_from_cross_neighbors(rank, num_workers, comm):
 def point_letter(row, column):
     l = ["AB", "CD"]
     return l[row%2][column%2]
+
+def send_data_to_neighbors(data, rank, num_workers, comm):
+    send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
+    send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
+    send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
     
 
 def communicate(data, rank, num_workers, comm):
@@ -255,9 +272,7 @@ def communicate(data, rank, num_workers, comm):
     
 
     if point_letter(process_row, process_col) == "A":
-        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
-        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
-        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+        send_data_to_neighbors(data, rank, num_workers, comm)
 
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
@@ -266,9 +281,7 @@ def communicate(data, rank, num_workers, comm):
     elif point_letter(process_row, process_col) == "B":
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
-        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
-        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
-        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+        send_data_to_neighbors(data, rank, num_workers, comm)
 
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
@@ -277,9 +290,7 @@ def communicate(data, rank, num_workers, comm):
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
-        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
-        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
-        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+        send_data_to_neighbors(data, rank, num_workers, comm)
 
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
@@ -288,75 +299,138 @@ def communicate(data, rank, num_workers, comm):
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
-        send_to_cross_neighbors(data[0,2,5,7], rank, num_workers, comm)
-        send_to_horizontal_neighbors(data[3,4], rank, num_workers, comm)
-        send_to_vertical_neighbors(data[1,6], rank, num_workers, comm)
+        send_data_to_neighbors(data, rank, num_workers, comm)
 
     return cross_neighbor_data[0], vertical_neighbor_data[0], cross_neighbor_data[1], horizontal_neighbor_data[0], horizontal_neighbor_data[1], cross_neighbor_data[2], vertical_neighbor_data[1], cross_neighbor_data[3] 
 
-def merge_grids(own_grid, data, rank, num_workers, n):
+class ExtendedGrid:
     """
-    :param data: the received data from neighbors, ordered as [upperleft, up, upperright, left, right, lowerleft, down, lowerright]
-    :param rank: the rank of the process
-    :param num_workers: the total number of workers
-    :param n: the number of lines each worker will be responsible
-    :return: the merged grid
+    A class to represent the grid that includes the grids of the neighboring processors
     """
 
-    merged_grid = Grid(3*n)
+    def __init__(self, own_grid, nearby_grids, rank, num_workers, n):
+        self.grids = [nearby_grids[0], nearby_grids[1], nearby_grids[2], nearby_grids[3],
+                      own_grid,
+                      nearby_grids[4], nearby_grids[5], nearby_grids[6], nearby_grids[7]]
+        self.rank = rank
+        self.num_workers = num_workers
+        self.n = n
 
-    for i in range(n):
-        for j in range(n):
-            merged_grid.set(i, j, data[0].get(i, j))
-        for j in range(n, 2*n):
-            merged_grid.set(i, j, data[1].get(i, j - n))
-        for j in range(2*n, 3*n):
-            merged_grid.set(i, j, data[2].get(i, j - 2*n))
+    def get(self, row, col):
+        """
+        Takes in i, j coordinates relative to the own grid and returns the corresponding pixel
+        """
 
-    for i in range(n, 2*n):
-        for j in range(n):
-            merged_grid.set(i, j, data[3].get(i - n, j))
-        for j in range(n, 2*n):
-            merged_grid.set(i, j, own_grid.get(i - n, j - n))
-        for j in range(2*n, 3*n):
-            merged_grid.set(i, j, data[4].get(i - n, j - 2*n))
+        n = self.n
+        left = col < 0
+        right = col >= n
+        top = row < 0
+        bottom = row >= n
 
-    for i in range(2*n, 3*n):
-        for j in range(n):
-            merged_grid.set(i, j, data[5].get(i - 2*n, j))
-        for j in range(n, 2*n):
-            merged_grid.set(i, j, data[6].get(i - 2*n, j - n))
-        for j in range(2*n, 3*n):
-            merged_grid.set(i, j, data[7].get(i - 2*n, j - 2*n))
-    
+        ret = None
 
+        if left and top:
+            ret = self.grids[0].get(row + n, col + n)
+        elif right and top:
+            ret = self.grids[2].get(row + n, col - n)
+        elif top:
+            ret = self.grids[1].get(row + n, col)
+        elif left and bottom:
+            ret = self.grids[5].get(row - n, col + n)
+        elif right and bottom:
+            ret = self.grids[7].get(row - n, col - n)
+        elif bottom:
+            ret = self.grids[6].get(row - n, col)
+        elif left:
+            ret = self.grids[3].get(row, col + n)
+        elif right:
+            ret = self.grids[4].get(row, col - n)
 
-    return merged_grid
+        return ret
 
-def handle_air_movement(grid, air_unit_coords, n):
+    def get_grid_index(self, row, col):
+        """
+        what neighbor grid index does row and col (given rel. to own grid) belong to
+        """
+
+        n = self.n
+        left = col < 0
+        right = col >= n
+        top = row < 0
+        bottom = row >= n
+
+        if left and top:
+            return 0
+        elif right and top:
+            return 2
+        elif top:
+            return 1
+        elif left and bottom:
+            return 5
+        elif right and bottom:
+            return 7
+        elif bottom:
+            return 6
+        elif left:
+            return 3
+        elif right:
+            return 4
+        else:
+            return -1
+
+    def coords_relative_to_grid_index(self, row, col, grid_index):
+        """
+        converts the coordinates relative to the own grid to the coordinates relative to the grid_index-th neighbor grid
+        """
+
+        if grid_index == 0:
+            return row - self.n, col - self.n
+        elif grid_index == 1:
+            return row - self.n, col
+        elif grid_index == 2:
+            return row - self.n, col + self.n
+        elif grid_index == 3:
+            return row, col - self.n
+        elif grid_index == 4:
+            return row, col
+        elif grid_index == 5:
+            return row + self.n, col - self.n
+        elif grid_index == 6:
+            return row + self.n, col
+        elif grid_index == 7:
+            return row + self.n, col + self.n
+        else:
+            return -1, -1
+
+def handle_air_movement(extended_grid):
     """
     Handles the movement phase for Air units
-    Returns a list of movement decisions to be applied simultaneously
+    Returns a list of movement decisions (of owned air units) to be applied simultaneously
     """
+
+    n = 3 * extended_grid.n
+
+    air_unit_coords = extended_grid.grids[4].air_units.keys()
+
     movement_decisions = []  # List of (from_coord, to_coord) tuples
     
     for coord in air_unit_coords:
         best_position = coord
-        max_attackable = count_attackable_enemies(grid, coord, n)
+        max_attackable = count_attackable_enemies(extended_grid, coord)
         
-        pixel = grid.get(coord[0], coord[1])
+        pixel = extended_grid.get(coord[0], coord[1])
         # Check all possible movement directions
         for dx, dy in pixel.unit.attack_directions:
             new_x = coord[0] + dx
             new_y = coord[1] + dy
             
-            if 0 <= new_x < n and 0 <= new_y < n and grid.get(new_x, new_y) is None:
-                attackable = count_attackable_enemies(grid, (new_x, new_y), n)
+            if extended_grid.get(new_x, new_y) is None:
+                attackable = count_attackable_enemies(extended_grid, (new_x, new_y), n)
                 
                 if attackable > max_attackable:
                     max_attackable = attackable
                     best_position = (new_x, new_y)
-                elif attackable == max_attackable and attackable > count_attackable_enemies(grid, coord, n):
+                elif attackable == max_attackable and attackable > count_attackable_enemies(extended_grid, coord, n):
                     if new_x < best_position[0] or (new_x == best_position[0] and new_y < best_position[1]):
                         best_position = (new_x, new_y)
         
@@ -365,12 +439,15 @@ def handle_air_movement(grid, air_unit_coords, n):
     
     return movement_decisions
 
-def count_attackable_enemies(grid, coord, n):
+def count_attackable_enemies(extended_grid, coord):
     """
     Counts how many enemy units an Air unit can attack from the given position
     """
+
+    n = 3 * extended_grid.n
+
     count = 0
-    pixel = grid.get(coord[0], coord[1])
+    pixel = extended_grid.get(coord[0], coord[1])
     if pixel is None or pixel.unit.type != 'A':
         return 0
         
@@ -380,15 +457,23 @@ def count_attackable_enemies(grid, coord, n):
         col = coord[1] + dcol
         
         if 0 <= row < n and 0 <= col < n:
-            if grid.get(row, col) is not None and grid.get(row, col).unit.type != 'A':
+            if extended_grid.get(row, col) is not None and extended_grid.get(row, col).unit.type != 'A':
                 count += 1
-            elif grid.get(row, col) is None:
+            elif extended_grid.get(row, col) is None:
                 row += drow
                 col += dcol
-                if 0 <= row < n and 0 <= col < n and grid.get(row, col) is not None and grid.get(row, col).unit.type != 'A':
+                if 0 <= row < n and 0 <= col < n and extended_grid.get(row, col) is not None and extended_grid.get(row, col).unit.type != 'A':
                     count += 1
                     
     return count
+
+def merge_air_units(air1, air2):
+    air1.attack += air2.attack
+    air1.health = min(AIR_HP, air1.health + air2.health)
+    return air1
+
+def _debug_print_arrived(checkpoint):
+    print(f"Reached checkpoint {checkpoint} with worker {rank}")
 
 
 if __name__ == "__main__":
@@ -456,6 +541,8 @@ if __name__ == "__main__":
 
             # 2) distribute each wave to workers
 
+            _debug_print_arrived(0)
+
             for worker_rank in range(1, num_workers + 1):
 
                 # these worker x, y values are the x, y values of processors in the processor-grid
@@ -490,46 +577,93 @@ if __name__ == "__main__":
         # process the rounds
         for round in range(num_rounds_per_wave):
 
+            _debug_print_arrived(1)
+
             # 1) movement phase
 
             air_unit_coords = list(worker_grid.air_units.keys())
 
-            # get extra information from nearby processors if needed
-            extra_left_needed = 0
-            extra_right_needed = 0
-            extra_top_needed = 0
-            extra_bottom_needed = 0
-
-            for coord in air_unit_coords:
-                extra_left_needed = max(extra_left_needed, 3 - coord[1])
-                extra_right_needed = max(extra_right_needed, 3 - (n - 1 - coord[1]))
-                extra_top_needed = max(extra_top_needed, 3 - coord[0])
-                extra_bottom_needed = max(extra_bottom_needed, 3 - (n - 1 - coord[0]))
-
-            process_row = rank // num_workers_per_row
-            process_col = rank % num_workers_per_row
-
-            # process communication round
-            # every process sends its grid information to all neighbors to avoid unnecessary waiting at either send or recv
-            
+            # communication with neighbors
             data = [worker_grid for _ in range(8)]
-            incoming_data = communicate(data, rank, num_workers, comm)
-            extended_grid = merge_grids(worker_grid, incoming_data, rank, num_workers, n)
+
+            neighbor_grids = communicate(data, rank, num_workers, comm)
+            extended_grid = ExtendedGrid(worker_grid, neighbor_grids, rank, num_workers, n)
 
             # 1. Movement Phase (Air Units)
-            air_unit_coords = list(extended_grid.air_units.keys())
-            movement_decisions = handle_air_movement(extended_grid, air_unit_coords, extended_grid.n)
-            
+            movement_decisions = handle_air_movement(extended_grid)
+
+            airs_and_destinations_to_send = [[] for _ in range(8)]
+
+            _debug_print_arrived(2)
+
+            for air_coords, air_dest in movement_decisions:
+
+               # handle inside if dest is in the own grid
+                if 0 <= air_dest[0] < n and 0 <= air_dest[1] < n:
+                    if worker_grid.get(air_dest[0], air_dest[1]) is None:
+                        worker_grid.set(air_dest[0], air_dest[1], worker_grid.get(air_coords[0], air_coords[1]))
+                    else:
+                        # merge air units
+                        new_unit = merge_air_units(
+                            worker_grid.get(air_dest[0], air_dest[1]).unit,
+                            worker_grid.get(air_coords[0], air_coords[1]).unit
+                        )
+                        worker_grid.set(air_dest[0], air_dest[1], new_unit)
+
+                    worker_grid.set(air_coords[0], air_coords[1], None)
+
+                # send to the appropriate neighbor grid otherwise
+                else:
+                    grid_index = extended_grid.get_grid_index(air_dest[0], air_dest[1])
+                    air_to_send = worker_grid.get(air_coords[0], air_coords[1])
+                    air_dest = extended_grid.coords_relative_to_grid_index(air_dest[0], air_dest[1], grid_index)
+                    airs_and_destinations_to_send[grid_index].append((air_to_send, air_dest))
+
+                    worker_grid.set(air_coords[0], air_coords[1], None)
 
 
+            incoming_air_destinations = communicate(airs_and_destinations_to_send, rank, num_workers, comm)
+            incoming_air_destinations = [x for x in incoming_air_destinations]
 
-
-
-            # decide where air units go, if they collide, merge
-
-
+            for air_unit, air_dest in incoming_air_destinations:
+                if worker_grid.get(air_dest[0], air_dest[1]) is None:
+                    worker_grid.set(air_dest[0], air_dest[1], air_unit)
+                else:
+                    # merge air units
+                    new_unit = merge_air_units(
+                        worker_grid.get(air_dest[0], air_dest[1]).unit,
+                        air_unit.unit
+                    )
+                    worker_grid.set(air_dest[0], air_dest[1], new_unit)
 
             # 2) action phase (units either attack or skip, attacks are buffered)
+
+            _debug_print_arrived(20)
+
+            unit_lists = [
+                worker_grid.air_units,
+                worker_grid.fire_units,
+                worker_grid.water_units,
+                worker_grid.earth_units
+            ]
+            for unit_of_single_type in unit_lists:
+                for coord, unit in unit_of_single_type:
+                    if unit.type == 'A':
+                        attack_directions = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
+                        for direction in attack_directions:
+
+
+
+                    # the below is non-air units
+                    attack_coords = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
+                    for attack_coord in attack_coords:
+                        if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
+                            # handle the attack inside
+
+
+
+
+
 
 
             # 3) resolution phase (apply the buffered attacks)
