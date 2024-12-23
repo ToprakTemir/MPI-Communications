@@ -608,14 +608,11 @@ if __name__ == "__main__":
             # 3) collect the results from workers before the next wave
 
             for worker_rank in range(1, num_workers + 1):
-                print(f"here1 with worker_rank {worker_rank}", flush=True)
                 worker_grid = comm.recv(source=worker_rank)
-                print(f"here2 with worker_rank {worker_rank}", flush=True)
                 left, right, top, bottom = get_worker_borders(worker_rank, num_workers, n)
                 for col in range(left, right):
                     for row in range(top, bottom):
-                        if worker_grid.get(row - top, col - left).type != "Empty":
-                            main_grid.set(row, col, worker_grid.get(row - top, col - left))
+                        main_grid.set(row, col, worker_grid.get(row - top, col - left))
 
         # send end signal to workers
         for worker_rank in range(1, num_workers + 1):
@@ -706,7 +703,7 @@ if __name__ == "__main__":
 
                 # 2) action phase (units either buffer attacks or skip)
 
-                _debug_print_arrived(2.0)
+                # _debug_print_arrived(2.0)
 
                 # handling internal attacks and preparing the inter-process attack data to send to neighbors
 
@@ -764,7 +761,7 @@ if __name__ == "__main__":
                             (unit, coord_rel_to_receiver, attack_coord_rel_to_receiver)
                         )
 
-                _debug_print_arrived(2.1)
+                # _debug_print_arrived(2.1)
 
                 incoming_attacks = communicate(attacker_and_dest_to_send, rank, num_workers, comm)
 
@@ -789,7 +786,7 @@ if __name__ == "__main__":
 
                 # 3) resolution phase (apply the buffered attacks)
 
-                _debug_print_arrived(3.0)
+                # _debug_print_arrived(3.0)
 
                 # every dictionary holds {attacker_coord1: kill_count1, ...}
                 kill_info_to_send = {i: {} for i in range(8)}
@@ -806,7 +803,7 @@ if __name__ == "__main__":
                         continue
 
                     # unit is dead
-                    for attacking_unit in unit.units_that_attacked_me:
+                    for attacking_coord in unit.units_that_attacked_me:
                         if 0 <= attacking_coord[0] < n and 0 <= attacking_coord[1] < n: # attacker is owned by grid
                             attacker = worker_grid.get(attacking_coord[0], attacking_coord[1])
                             attacker.kill_count += 1
@@ -819,7 +816,7 @@ if __name__ == "__main__":
 
 
 
-                _debug_print_arrived(3.1)
+                # _debug_print_arrived(3.1)
 
                 attack_and_kill_info_to_send = {i: {} for i in range(8)}
                 for i in range(8):
@@ -837,7 +834,7 @@ if __name__ == "__main__":
                         attacker.did_attack = True
                         attacker.kill_count += kill_count
 
-                _debug_print_arrived(3.2)
+                # _debug_print_arrived(3.2)
 
                 # increase attack of fire units
                 for fire_unit in worker_grid.fire_units:
