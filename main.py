@@ -531,6 +531,7 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     -1 means attack is not successful because the units are of the same type
     """
 
+
     if grid.get(attack_coord[0], attack_coord[1]).type == "Empty":
         return 0
 
@@ -541,10 +542,14 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     if attacked_unit.type == attacking_unit.type:
         return -1
 
-    print(f"Attacking {attack_coord} from {unit_coord} which is a {attacking_unit} type", flush=True)
+    if attacking_unit.type == "F":
+        print("fire attack is " + str(attacking_unit.attack))
+
+    print(f"Attacking {attack_coord} from {unit_coord} which is a {attacking_unit.type} type", flush=True)
     attacked_unit.damage_to_be_taken += attacking_unit.attack
     attacking_unit.did_attack = True
     attacked_unit.units_that_attacked_me.append((unit_coord[0], unit_coord[1]))
+    print("aaa  " + attacking_unit.type)
     return 1
 
 
@@ -763,17 +768,13 @@ if __name__ == "__main__":
                     # air units, which needs extra check for the extra attack length
                     if unit.type == 'A':
 
-                        print(f"{coord} is here")
                         for direction in unit.attack_directions:
-                            print(f"{coord} is inside loop")
 
                             dx, dy = direction
                             attack_coord = [coord[0] + dx, coord[1] + dy]
                             far_attack_coord = [coord[0] + 2*dx, coord[1] + 2*dy]
 
                             if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
-
-                                print(f"{coord} is insider")
 
                                 try_close_attack = attack_inside_grid(worker_grid, coord, attack_coord)
 
@@ -784,7 +785,6 @@ if __name__ == "__main__":
                                 # continue if far attack is still inside own grid
                                 if 0 <= far_attack_coord[0] < n and 0 <= far_attack_coord[1] < n:
 
-                                    print(f"{coord} is inside far")
                                     try_far_attack = attack_inside_grid(worker_grid, coord, far_attack_coord)
                                     continue
 
@@ -858,8 +858,10 @@ if __name__ == "__main__":
 
                     # unit is dead
                     for attacking_coord in unit.units_that_attacked_me:
+                        print("hereherehrehreh", attacking_coord)
                         if 0 <= attacking_coord[0] < n and 0 <= attacking_coord[1] < n: # attacker is owned by grid
                             attacker = worker_grid.get(attacking_coord[0], attacking_coord[1])
+                            print(attacker.type)
                             attacker.kill_count += 1
                             continue
 
@@ -894,7 +896,8 @@ if __name__ == "__main__":
 
                 # increase attack of fire units
                 for fire_unit in worker_grid.fire_units.values():
-                    if fire_unit.kill_count > 0 and fire_unit.attack < FIRE_ATTACK + 6:
+                    print("fire unit kill count is" + str(fire_unit.kill_count))
+                    if fire_unit.kill_count > 0 and fire_unit.attack <= 6:
                         fire_unit.attack += 1
 
                 # reset per-round data
@@ -913,7 +916,7 @@ if __name__ == "__main__":
 
                 for coord, unit in all_owned_units:
                     print(f"unit {unit.type} is at {coord} has attack: {unit.did_attack} and health: {unit.health}")
-                    if unit.did_attack is False:
+                    if not unit.did_attack:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
 
                 # reset per round data
