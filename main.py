@@ -290,8 +290,7 @@ def communicate(data, rank, num_workers, comm):
     process_row = (rank-1) // num_workers_per_row
     process_col = (rank-1) % num_workers_per_row
 
-    print((process_row, process_col))
-    print(point_letter(process_row, process_col))
+    print((process_row, process_col), point_letter(process_row, process_col), flush=True)
 
     if point_letter(process_row, process_col) == "A":
 
