@@ -90,25 +90,25 @@ class Grid:
         else:
             raise ValueError("Index out of bounds of the grid.")
 
-    def set(self, i, j, pixel):
-        self.grid[i][j] = pixel
+    def set(self, i, j, unit):
+        self.grid[i][j] = unit
 
-        if pixel is None:
+        if unit is None:
             raise ValueError("Pixel cannot be None")
 
-        if pixel.type == "Empty":
-            if pixel.type == "A":
+        if unit.type == "Empty":
+            if unit.type == "A":
                 self.num_air += 1
-                self.air_units[(i, j)] = pixel.unit
-            elif pixel.type == "F":
+                self.air_units[(i, j)] = unit
+            elif unit.type == "F":
                 self.num_fire += 1
-                self.fire_units[(i, j)] = pixel.unit
-            elif pixel.type == "W":
+                self.fire_units[(i, j)] = unit
+            elif unit.type == "W":
                 self.num_water += 1
-                self.water_units[(i, j)] = pixel.unit
-            elif pixel.type == "E":
+                self.water_units[(i, j)] = unit
+            elif unit.type == "E":
                 self.num_earth += 1
-                self.earth_units[(i, j)] = pixel.unit
+                self.earth_units[(i, j)] = unit
 
         else: # then (i, j) is being deleted
             if (i, j) in self.air_units:
@@ -161,7 +161,6 @@ def get_worker_borders(worker_rank, num_workers, n):
 
 def send_to_horizontal_neighbors(data, rank, num_workers, comm):
     """
-    :param grid: the grid that will be sent to neighbors
     :param rank: the rank of the process
     :param num_workers: the total number of workers
     :param comm: the communicator object
@@ -436,8 +435,6 @@ def handle_air_movement(extended_grid):
     Returns a list of movement decisions (of owned air units) to be applied simultaneously
     """
 
-    n = 3 * extended_grid.n
-
     air_unit_coords = extended_grid.grids[4].air_units.keys()
 
     movement_decisions = []  # List of (from_coord, to_coord) tuples
@@ -448,17 +445,17 @@ def handle_air_movement(extended_grid):
         
         pixel = extended_grid.get(coord[0], coord[1])
         # Check all possible movement directions
-        for dx, dy in pixel.unit.attack_directions:
+        for dx, dy in pixel.attack_directions:
             new_x = coord[0] + dx
             new_y = coord[1] + dy
             
             if extended_grid.get(new_x, new_y).type == "Empty":
-                attackable = count_attackable_enemies(extended_grid, (new_x, new_y), n)
+                attackable = count_attackable_enemies(extended_grid, (new_x, new_y))
                 
                 if attackable > max_attackable:
                     max_attackable = attackable
                     best_position = (new_x, new_y)
-                elif attackable == max_attackable and attackable > count_attackable_enemies(extended_grid, coord, n):
+                elif attackable == max_attackable and attackable > count_attackable_enemies(extended_grid, coord):
                     if new_x < best_position[0] or (new_x == best_position[0] and new_y < best_position[1]):
                         best_position = (new_x, new_y)
         
@@ -480,7 +477,7 @@ def count_attackable_enemies(extended_grid, coord):
         return 0
         
     # Check all directions including diagonals
-    for drow, dcol in pixel.unit.attack_directions:
+    for drow, dcol in pixel.attack_directions:
         row = coord[0] + drow
         col = coord[1] + dcol
         
@@ -521,7 +518,7 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     if attacked_unit.type == attacking_unit.type:
         return -1
 
-    attacked_unit.damage_to_be_taken += attacking_unit.unit.attack
+    attacked_unit.damage_to_be_taken += attacking_unit.attack
     attacking_unit.did_attack = True
     attacked_unit.units_that_attacked_me.append(attacking_unit)
     return 1
@@ -602,9 +599,10 @@ if __name__ == "__main__":
 
                 for col in range(left, right):
                     for row in range(top, bottom):
-                        if worker_grid.get(row - top, col - left).type != "Empty":
-                            worker_grid.set(row - top, col - left, main_grid.get(row, col).copy())
+                        if worker_grid.get(row - top, col - left).type == "Empty":
+                            worker_grid.set(row - top, col - left, main_grid.get(row, col))
 
+                print(f"worker_grid: \n{worker_grid}", flush=True)
                 comm.send([worker_grid, N, n, num_rounds_per_wave], dest=worker_rank)
 
 
@@ -618,7 +616,7 @@ if __name__ == "__main__":
                 for col in range(left, right):
                     for row in range(top, bottom):
                         if worker_grid.get(row - top, col - left).type != "Empty":
-                            main_grid.set(row, col, worker_grid.get(row - top, col - left).copy())
+                            main_grid.set(row, col, worker_grid.get(row - top, col - left))
 
         # send end signal to workers
         for worker_rank in range(1, num_workers + 1):
@@ -668,8 +666,8 @@ if __name__ == "__main__":
                         else:
                             # merge air units
                             new_unit = merge_air_units(
-                                worker_grid.get(air_dest[0], air_dest[1]).unit,
-                                worker_grid.get(air_coords[0], air_coords[1]).unit
+                                worker_grid.get(air_dest[0], air_dest[1]),
+                                worker_grid.get(air_coords[0], air_coords[1])
                             )
                             worker_grid.set(air_dest[0], air_dest[1], new_unit)
 
@@ -700,8 +698,8 @@ if __name__ == "__main__":
                     else:
                         # merge air units
                         new_unit = merge_air_units(
-                            worker_grid.get(air_dest[0], air_dest[1]).unit,
-                            air_unit.unit
+                            worker_grid.get(air_dest[0], air_dest[1]),
+                            air_unit
                         )
                         worker_grid.set(air_dest[0], air_dest[1], new_unit)
 
@@ -709,7 +707,7 @@ if __name__ == "__main__":
 
                 # 2) action phase (units either buffer attacks or skip)
 
-                # _debug_print_arrived(2.0)
+                _debug_print_arrived(2.0)
 
                 # handling internal attacks and preparing the inter-process attack data to send to neighbors
 
@@ -718,7 +716,7 @@ if __name__ == "__main__":
                     for j in range(n):
                         unit = worker_grid.get(i, j)
                         if unit.type != "Empty":
-                            all_owned_units.append((i, j, unit))
+                            all_owned_units.append(((i, j), unit))
 
                 attacker_and_dest_to_send = [[] for _ in range(8)]
                 for coord, unit in all_owned_units:
@@ -753,7 +751,7 @@ if __name__ == "__main__":
                         continue
 
                     # non-air units
-                    attack_coords = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
+                    attack_coords = [[coord[0] + dx, coord[1] + dy] for dx, dy in unit.attack_directions]
                     for attack_coord in attack_coords:
 
                         if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
@@ -767,7 +765,7 @@ if __name__ == "__main__":
                             (unit, coord_rel_to_receiver, far_coord_rel_to_receiver)
                         )
 
-                # _debug_print_arrived(2.1)
+                _debug_print_arrived(2.1)
 
                 incoming_attacks = communicate(attacker_and_dest_to_send, rank, num_workers, comm)
 
@@ -792,12 +790,12 @@ if __name__ == "__main__":
 
                 # 3) resolution phase (apply the buffered attacks)
 
-                # _debug_print_arrived(3.0)
+                _debug_print_arrived(3.0)
 
                 # every dictionary holds {attacker_coord1: kill_count1, ...}
                 kill_info_to_send = {i: {} for i in range(8)}
 
-                for unit in all_owned_units:
+                for _, _, unit in all_owned_units:
                     if unit.damage_to_be_taken == 0:
                         continue
 
@@ -854,12 +852,15 @@ if __name__ == "__main__":
                     unit.kill_count = 0
                     if unit.health <= 0:
                         worker_grid.set(unit[0], unit[1], EMPTY_UNIT)
+                        all_owned_units.remove(unit)
 
+
+                print(str(worker_grid), flush=True)
 
                 # 4) healing phase
                 # _debug_print_arrived(4.0)
 
-                for unit in all_owned_units:
+                for _, _, unit in all_owned_units:
                     if unit.did_attack is False:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
 
