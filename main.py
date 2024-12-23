@@ -1,13 +1,6 @@
 import mpi4py.MPI as MPI
 import sys
 
-class Unit:
-    def __init__(self, type, health, attack, heal_rate, attack_directions):
-        self.type = type
-        self.health = health
-        self.attack = attack
-        self.heal_rate = heal_rate
-        self.attack_directions = attack_directions
 
 # unit stats
 EARTH_HP = 18
@@ -30,6 +23,19 @@ AIR_ATTACK = 2
 AIR_HEAL_RATE = 2
 AIR_ATTACK_DIRECTIONS = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
 
+class Unit:
+    def __init__(self, type, health, attack, heal_rate, attack_directions):
+        self.type = type
+        self.health = health
+        self.attack = attack
+        self.heal_rate = heal_rate
+        self.attack_directions = attack_directions
+
+        self.damage_to_be_taken = 0
+        self.did_attack = False
+        self.did_kill = False
+
+
 def init_earth():
     return Unit("E", 18, 2, 3, [(0, 1), (1, 0), (0, -1), (-1, 0)])
 
@@ -43,22 +49,16 @@ def init_air():
     attack_directions = [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]
     return Unit("A", 10, 2, 2, attack_directions)
 
-class Pixel:
-    def __init__(self, unit):
-        self.unit = unit
-        self.damage_to_be_taken = 0
+def init_empty():
+    return Unit("Empty", -1, -1, -1, [])
 
-    def __str__(self):
-        return self.unit.type
-
-    def copy(self):
-        return Pixel(self.unit)
+EMPTY_UNIT = init_empty()
 
 # processes will have their own grid, and they will
 class Grid:
     def __init__(self, n):
         self.n = n
-        self.grid = [[None for _ in range(n)] for _ in range(n)]
+        self.grid = [[EMPTY_UNIT for _ in range(n)] for _ in range(n)]
         self.num_air = 0
         self.num_fire = 0
         self.num_water = 0
@@ -75,7 +75,7 @@ class Grid:
         ret = " "
         for i in range(self.n):
             for j in range(self.n):
-                if self.grid[i][j] is not None:
+                if self.grid[i][j].type != "Empty":
                     ret += self.grid[i][j].type + " "
                 else:
                     ret += ". "
@@ -86,21 +86,25 @@ class Grid:
         if 0 <= i < self.n and 0 <= j < self.n:
             return self.grid[i][j]
         else:
-            return -1
+            raise ValueError("Index out of bounds of the grid.")
 
     def set(self, i, j, pixel):
         self.grid[i][j] = pixel
-        if pixel is not None and pixel.unit is not None:
-            if pixel.unit.type == "A":
+
+        if pixel is None:
+            raise ValueError("Pixel cannot be None")
+
+        if pixel.type == "Empty":
+            if pixel.type == "A":
                 self.num_air += 1
                 self.air_units[(i, j)] = pixel.unit
-            elif pixel.unit.type == "F":
+            elif pixel.type == "F":
                 self.num_fire += 1
                 self.fire_units[(i, j)] = pixel.unit
-            elif pixel.unit.type == "W":
+            elif pixel.type == "W":
                 self.num_water += 1
                 self.water_units[(i, j)] = pixel.unit
-            elif pixel.unit.type == "E":
+            elif pixel.type == "E":
                 self.num_earth += 1
                 self.earth_units[(i, j)] = pixel.unit
 
@@ -134,8 +138,9 @@ def create_unit(unit_type):
 def get_worker_borders(worker_rank, num_workers, n):
     """
     :param n: the number of lines each worker will be responsible
-    :return: (left, right, top, bottom) boundary indexes of the area that the worker will be responsible for. right and
-    bottom boundaries are exclusive, left and top boundaries are inclusive.
+    :return: (left, right, top, bottom) boundary indexes of the area that the worker will be responsible for. \n
+    all boundaries are inclusive
+
     """
 
     worker_rank -= 1 # so that x and y values start from 0
@@ -162,36 +167,36 @@ def send_to_horizontal_neighbors(data, rank, num_workers, comm):
     """
 
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
-    if not rank % num_workers_per_row == 0:  # check if leftmost process
+    if not wrank % num_workers_per_row == 0:  # check if leftmost process
         comm.send(data[0], dest=rank - 1)
 
-    if not rank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+    if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
         comm.send(data[1], dest=rank + 1)
     
 
 def send_to_vertical_neighbors(data, rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
-    if not rank < num_workers_per_row:
+    if not wrank < num_workers_per_row:
         comm.send(data[0], dest=rank - num_workers_per_row)
-    if not rank >= num_workers - num_workers_per_row:
+    if not wrank >= num_workers - num_workers_per_row:
         comm.send(data[1], dest=rank + num_workers_per_row)
     
 
 def send_to_cross_neighbors(data, rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
-    if not rank % num_workers_per_row == 0 and not rank < num_workers_per_row:
+    if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
         comm.send(data[0], dest=rank - num_workers_per_row - 1)
-    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank < num_workers_per_row:
+    if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
         comm.send(data[1], dest=rank - num_workers_per_row + 1)
-    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank >= num_workers - num_workers_per_row:
+    if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
         comm.send(data[2], dest=rank + num_workers_per_row + 1)
-    if not rank % num_workers_per_row == 0 and not rank >= num_workers - num_workers_per_row:
+    if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
         comm.send(data[3], dest=rank + num_workers_per_row - 1)
     
     
@@ -199,48 +204,48 @@ def send_to_cross_neighbors(data, rank, num_workers, comm):
 
 def receive_from_horizontal_neighbors(rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
     left_data = None
     right_data = None
 
-    if not rank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+    if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
         right_data = comm.recv(source=rank + 1)
-    if not rank % num_workers_per_row == 0:  # check if leftmost process
+    if not wrank % num_workers_per_row == 0:  # check if leftmost process
         left_data = comm.recv(source=rank - 1)
 
     return left_data, right_data
 
 def receive_from_vertical_neighbors(rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
     top_data = None
     bottom_data = None
 
-    if not rank >= num_workers - num_workers_per_row:
+    if not wrank >= num_workers - num_workers_per_row:
         bottom_data = comm.recv(source=rank + num_workers_per_row)
-    if not rank < num_workers_per_row:
+    if not wrank < num_workers_per_row:
         top_data = comm.recv(source=rank - num_workers_per_row)
 
     return top_data, bottom_data
 
 def receive_from_cross_neighbors(rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
-    rank = rank - 1  # only the worker ranks are considered
+    wrank = rank - 1  # only the worker ranks are considered
 
     top_left_data = None
     top_right_data = None
     bottom_left_data = None
     bottom_right_data = None
 
-    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank >= num_workers - num_workers_per_row:
+    if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
         bottom_right_data = comm.recv(source=rank + num_workers_per_row + 1)
-    if not rank % num_workers_per_row == 0 and not rank < num_workers_per_row:
+    if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
         top_left_data = comm.recv(source=rank - num_workers_per_row - 1)
-    if not rank % num_workers_per_row == num_workers_per_row - 1 and not rank < num_workers_per_row:
+    if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
         top_right_data = comm.recv(source=rank - num_workers_per_row + 1)
-    if not rank % num_workers_per_row == 0 and not rank >= num_workers - num_workers_per_row:
+    if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
         bottom_left_data = comm.recv(source=rank + num_workers_per_row - 1)
 
     return top_left_data, top_right_data, bottom_left_data, bottom_right_data
@@ -268,8 +273,9 @@ def communicate(data, rank, num_workers, comm):
     num_workers_per_row = int(num_workers ** 0.5)
     process_row = rank // num_workers_per_row
     process_col = rank % num_workers_per_row
-    
-    
+
+    print((process_row, process_col))
+    print(point_letter(process_row, process_col))
 
     if point_letter(process_row, process_col) == "A":
         send_data_to_neighbors(data, rank, num_workers, comm)
@@ -348,59 +354,59 @@ class ExtendedGrid:
 
         return ret
 
-    def get_grid_index(self, row, col):
-        """
-        what neighbor grid index does row and col (given rel. to own grid) belong to
-        """
+def coords_relative_to_grid_index(row, col, grid_index, n):
+    """
+    converts the coordinates relative to the own grid to the coordinates relative to the grid_index-th neighbor grid
+    """
 
-        n = self.n
-        left = col < 0
-        right = col >= n
-        top = row < 0
-        bottom = row >= n
+    if grid_index == 0:
+        return row - n, col - n
+    elif grid_index == 1:
+        return row - n, col
+    elif grid_index == 2:
+        return row - n, col + n
+    elif grid_index == 3:
+        return row, col - n
+    elif grid_index == 4:
+        return row, col
+    elif grid_index == 5:
+        return row + n, col - n
+    elif grid_index == 6:
+        return row + n, col
+    elif grid_index == 7:
+        return row + n, col + n
+    else:
+        return -1, -1
 
-        if left and top:
-            return 0
-        elif right and top:
-            return 2
-        elif top:
-            return 1
-        elif left and bottom:
-            return 5
-        elif right and bottom:
-            return 7
-        elif bottom:
-            return 6
-        elif left:
-            return 3
-        elif right:
-            return 4
-        else:
-            return -1
 
-    def coords_relative_to_grid_index(self, row, col, grid_index):
-        """
-        converts the coordinates relative to the own grid to the coordinates relative to the grid_index-th neighbor grid
-        """
+def get_grid_index(row, col, n):
+    """
+    what neighbor grid index does row and col (given rel. to own grid) belong to
+    """
 
-        if grid_index == 0:
-            return row - self.n, col - self.n
-        elif grid_index == 1:
-            return row - self.n, col
-        elif grid_index == 2:
-            return row - self.n, col + self.n
-        elif grid_index == 3:
-            return row, col - self.n
-        elif grid_index == 4:
-            return row, col
-        elif grid_index == 5:
-            return row + self.n, col - self.n
-        elif grid_index == 6:
-            return row + self.n, col
-        elif grid_index == 7:
-            return row + self.n, col + self.n
-        else:
-            return -1, -1
+    left = col < 0
+    right = col >= n
+    top = row < 0
+    bottom = row >= n
+
+    if left and top:
+        return 0
+    elif right and top:
+        return 2
+    elif top:
+        return 1
+    elif left and bottom:
+        return 5
+    elif right and bottom:
+        return 7
+    elif bottom:
+        return 6
+    elif left:
+        return 3
+    elif right:
+        return 4
+    else:
+        return -1
 
 def handle_air_movement(extended_grid):
     """
@@ -424,7 +430,7 @@ def handle_air_movement(extended_grid):
             new_x = coord[0] + dx
             new_y = coord[1] + dy
             
-            if extended_grid.get(new_x, new_y) is None:
+            if extended_grid.get(new_x, new_y).type == "Empty":
                 attackable = count_attackable_enemies(extended_grid, (new_x, new_y), n)
                 
                 if attackable > max_attackable:
@@ -448,7 +454,7 @@ def count_attackable_enemies(extended_grid, coord):
 
     count = 0
     pixel = extended_grid.get(coord[0], coord[1])
-    if pixel is None or pixel.unit.type != 'A':
+    if pixel.type == "Empty" or pixel.type != 'A':
         return 0
         
     # Check all directions including diagonals
@@ -457,12 +463,12 @@ def count_attackable_enemies(extended_grid, coord):
         col = coord[1] + dcol
         
         if 0 <= row < n and 0 <= col < n:
-            if extended_grid.get(row, col) is not None and extended_grid.get(row, col).unit.type != 'A':
+            if extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                 count += 1
-            elif extended_grid.get(row, col) is None:
+            elif extended_grid.get(row, col).type == "Empty":
                 row += drow
                 col += dcol
-                if 0 <= row < n and 0 <= col < n and extended_grid.get(row, col) is not None and extended_grid.get(row, col).unit.type != 'A':
+                if 0 <= row < n and 0 <= col < n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                     count += 1
                     
     return count
@@ -476,6 +482,27 @@ def _debug_print_arrived(checkpoint):
     print(f"Reached checkpoint {checkpoint} with worker {rank}")
 
 
+def attack_inside_grid(grid, unit_coord, attack_coord):
+    """
+    output
+    0 means tried attack coord is empty, \n
+    1 means attack is successful, \n
+    -1 means attack is not successful because the units are of the same type
+    """
+
+    if grid.get(attack_coord[0], attack_coord[1]).type == "Empty":
+        return 0
+
+    attacking_unit = grid.get(unit_coord[0], unit_coord[1])
+    attacked_unit = grid.get(attack_coord[0], attack_coord[1])
+    if attacked_unit.type == attacking_unit.type:
+        return -1
+
+    attacked_unit.damage_to_be_taken += attacking_unit.unit.attack
+    return 1
+
+
+
 if __name__ == "__main__":
 
     # check if the terminal input is correct
@@ -483,37 +510,34 @@ if __name__ == "__main__":
         print("Usage: mpiexec -n [P] main.py <input.txt> <output.txt>")
         sys.exit(1)
 
-
-    # read the input before setting multiple processes
-    input_file_name = sys.argv[1]
-    output_file_name = sys.argv[2]
-
-    input_file = open(input_file_name, "r")
-    output_file = open(output_file_name, "w")
-
-    lines = input_file.readlines()
-    first_line = lines[0].strip().split(" ")
-    line_index = 1
-
-    # IMPORTANT: num_processors being a perfect square that is a divisor of N**2 is assumed
-    N = int(first_line[0])
-    num_waves = int(first_line[1])
-    num_units_per_faction_per_wave = int(first_line[2])
-    num_rounds_per_wave = int(first_line[3])
-
-
     # set up the MPI
-    MPI.Init()
     comm = MPI.COMM_WORLD
 
     rank = comm.Get_rank() # will be different for every process, 0 is the manager
     num_workers = comm.Get_size() - 1
     num_workers_per_row = int(num_workers ** 0.5)
 
-    n = N // num_workers  # the number of lines each worker will be responsible
+
 
     if rank == 0: # manager
 
+        # read the input before setting multiple processes
+        input_file_name = sys.argv[1]
+        output_file_name = sys.argv[2]
+
+        input_file = open(input_file_name, "r")
+        output_file = open(output_file_name, "w")
+
+        lines = input_file.readlines()
+        first_line = lines[0].strip().split(" ")
+        line_index = 1
+
+        # IMPORTANT: num_processors being a perfect square that is a divisor of N**2 is assumed
+        N = int(first_line[0])
+        num_waves = int(first_line[1])
+        num_units_per_faction_per_wave = int(first_line[2])
+        num_rounds_per_wave = int(first_line[3])
+        n = N // int(num_workers ** 0.5)  # the number of lines each worker will be responsible
         main_grid = Grid(N)
 
         for wave in range(num_waves):
@@ -529,11 +553,11 @@ if __name__ == "__main__":
                 coordinates = line[2:].strip().split(",")
 
                 for coord in coordinates:
-                    i, j = coord.split(" ") # x and y are swapped in the input file
+                    i, j = coord.split() # x and y are swapped in the input file
                     i = int(i)
                     j = int(j)
-                    if main_grid.get(i, j) is None:
-                        main_grid.set(i, j, Pixel(create_unit(unit_type)))
+                    if main_grid.get(i, j).type == "Empty":
+                        main_grid.set(i, j, create_unit(unit_type))
                     else:
                         pass # Don't override existing units
 
@@ -553,10 +577,10 @@ if __name__ == "__main__":
 
                 for col in range(left, right):
                     for row in range(top, bottom):
-                        if worker_grid.get(row, col) is not None:
+                        if worker_grid.get(row - top, col - left).type != "Empty":
                             worker_grid.set(row - top, col - left, main_grid.get(row, col).copy())
 
-                comm.send(worker_grid, dest=worker_rank)
+                comm.send([worker_grid, N, n, num_rounds_per_wave], dest=worker_rank)
 
 
             # 3) collect the results from workers before the next wave
@@ -566,18 +590,18 @@ if __name__ == "__main__":
                 left, right, top, bottom = get_worker_borders(worker_rank, num_workers, n)
                 for col in range(left, right):
                     for row in range(top, bottom):
-                        if worker_grid.get(row - top, col - left) is not None:
+                        if worker_grid.get(row - top, col - left).unit.t != "Empty":
                             main_grid.set(row, col, worker_grid.get(row - top, col - left).copy())
 
 
     else: # worker
 
-        worker_grid = comm.recv(source=0)
+        worker_grid, N, n, num_rounds_per_wave = comm.recv(source=0)
 
         # process the rounds
         for round in range(num_rounds_per_wave):
 
-            _debug_print_arrived(1)
+            # _debug_print_arrived(1)
 
             # 1) movement phase
 
@@ -585,8 +609,9 @@ if __name__ == "__main__":
 
             # communication with neighbors
             data = [worker_grid for _ in range(8)]
-
+            print("BR")
             neighbor_grids = communicate(data, rank, num_workers, comm)
+            print("UH")
             extended_grid = ExtendedGrid(worker_grid, neighbor_grids, rank, num_workers, n)
 
             # 1. Movement Phase (Air Units)
@@ -600,7 +625,7 @@ if __name__ == "__main__":
 
                # handle inside if dest is in the own grid
                 if 0 <= air_dest[0] < n and 0 <= air_dest[1] < n:
-                    if worker_grid.get(air_dest[0], air_dest[1]) is None:
+                    if worker_grid.get(air_dest[0], air_dest[1]).type == "Empty":
                         worker_grid.set(air_dest[0], air_dest[1], worker_grid.get(air_coords[0], air_coords[1]))
                     else:
                         # merge air units
@@ -610,23 +635,23 @@ if __name__ == "__main__":
                         )
                         worker_grid.set(air_dest[0], air_dest[1], new_unit)
 
-                    worker_grid.set(air_coords[0], air_coords[1], None)
+                    worker_grid.set(air_coords[0], air_coords[1], EMPTY_UNIT)
 
                 # send to the appropriate neighbor grid otherwise
                 else:
-                    grid_index = extended_grid.get_grid_index(air_dest[0], air_dest[1])
+                    grid_index = get_grid_index(air_dest[0], air_dest[1], n)
                     air_to_send = worker_grid.get(air_coords[0], air_coords[1])
-                    air_dest = extended_grid.coords_relative_to_grid_index(air_dest[0], air_dest[1], grid_index)
+                    air_dest = coords_relative_to_grid_index(air_dest[0], air_dest[1], grid_index, n)
                     airs_and_destinations_to_send[grid_index].append((air_to_send, air_dest))
 
-                    worker_grid.set(air_coords[0], air_coords[1], None)
+                    worker_grid.set(air_coords[0], air_coords[1], EMPTY_UNIT)
 
 
             incoming_air_destinations = communicate(airs_and_destinations_to_send, rank, num_workers, comm)
             incoming_air_destinations = [x for x in incoming_air_destinations]
 
             for air_unit, air_dest in incoming_air_destinations:
-                if worker_grid.get(air_dest[0], air_dest[1]) is None:
+                if worker_grid.get(air_dest[0], air_dest[1]).type == "Empty":
                     worker_grid.set(air_dest[0], air_dest[1], air_unit)
                 else:
                     # merge air units
@@ -640,25 +665,70 @@ if __name__ == "__main__":
 
             _debug_print_arrived(20)
 
+            # handling internal attacks and preparing the inter-process attack data to send to neighbors
+
             unit_lists = [
                 worker_grid.air_units,
                 worker_grid.fire_units,
                 worker_grid.water_units,
                 worker_grid.earth_units
             ]
+
+            attacker_and_dest_to_send = [[] for _ in range(8)]
             for unit_of_single_type in unit_lists:
                 for coord, unit in unit_of_single_type:
+
                     if unit.type == 'A':
-                        attack_directions = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
-                        for direction in attack_directions:
+                        for direction in unit.attack_directions:
+                            dx, dy = direction
+                            attack_coord = [coord[0] + dx, coord[1] + dy]
+                            far_attack_coord = [coord[0] + 2*dx, coord[1] + 2*dy]
+                            if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
 
+                                try_close_attack = attack_inside_grid(worker_grid, coord, attack_coord)
+                                if try_close_attack == -1:
+                                    continue
+                                if try_close_attack == 1:
+                                    unit.did_attack = True
+                                    continue
 
+                                if 0 <= far_attack_coord[0] < n and 0 <= far_attack_coord[1] < n:
+                                    attack_inside_grid(worker_grid, coord, far_attack_coord)
+                                else:
+                                    grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
+                                    attacker_and_dest_to_send[grid_index].append((unit, far_attack_coord))
+                        continue
 
-                    # the below is non-air units
+                    # below is non-air units
                     attack_coords = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
                     for attack_coord in attack_coords:
                         if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
-                            # handle the attack inside
+                            attack_inside_grid(worker_grid, coord, attack_coord)
+                        else:
+                            grid_index = get_grid_index(attack_coord[0], attack_coord[1], n)
+                            attacker_and_dest_to_send[grid_index].append((unit, attack_coord))
+
+            _debug_print_arrived(21)
+
+            incoming_attacks = communicate(attacker_and_dest_to_send, rank, num_workers, comm)
+            incoming_attacks = [x for x in incoming_attacks]
+            for attacker, coord in incoming_attacks:
+                attacked_pixel = worker_grid.get(coord[0], coord[1])
+                if attacked_pixel.type != "Empty" and attacked_pixel.type != attacker.type:
+                    attacked_pixel.damage_to_be_taken += attacker.attack
+
+            _debug_print_arrived(22)
+
+            # apply damage
+            for pixel in [unit_list for unit_list in unit_lists]:
+                for coord, unit in pixel:
+                    if unit.type == "E":
+                        # halve damage
+                        unit.damage_to_be_taken //= 2
+
+
+
+
 
 
 
@@ -682,17 +752,7 @@ if __name__ == "__main__":
 
         # send data back to manager
 
-
-
-
-
-
-
-
-
-
-
+    if rank == 0:
+        input_file.close()
+        output_file.close()
     # cleanup
-    MPI.Finalize()
-    input_file.close()
-    output_file.close()
