@@ -170,9 +170,11 @@ def send_to_horizontal_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank % num_workers_per_row == 0:  # check if leftmost process
+        print(f"sending from {rank} to {rank - 1}", flush=True)
         comm.send(data[0], dest=rank - 1)
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+        print(f"sending from {rank} to {rank + 1}", flush=True)
         comm.send(data[1], dest=rank + 1)
     
 
@@ -181,8 +183,10 @@ def send_to_vertical_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank < num_workers_per_row:
+        print(f"sending from {rank} to {rank - num_workers_per_row}", flush=True)
         comm.send(data[0], dest=rank - num_workers_per_row)
     if not wrank >= num_workers - num_workers_per_row:
+        print(f"sending from {rank} to {rank + num_workers_per_row}", flush=True)
         comm.send(data[1], dest=rank + num_workers_per_row)
     
 
@@ -191,12 +195,16 @@ def send_to_cross_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
+        print(f"sending from {rank} to {rank - num_workers_per_row - 1}", flush=True)
         comm.send(data[0], dest=rank - num_workers_per_row - 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
+        print(f"sending from {rank} to {rank - num_workers_per_row + 1}", flush=True)
         comm.send(data[1], dest=rank - num_workers_per_row + 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
+        print(f"sending from {rank} to {rank + num_workers_per_row + 1}", flush=True)
         comm.send(data[2], dest=rank + num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
+        print(f"sending from {rank} to {rank + num_workers_per_row - 1}", flush=True)
         comm.send(data[3], dest=rank + num_workers_per_row - 1)
     
     
@@ -210,8 +218,10 @@ def receive_from_horizontal_neighbors(rank, num_workers, comm):
     right_data = None
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
+        print(f"waiting from {rank + 1} for {rank}", flush=True)
         right_data = comm.recv(source=rank + 1)
     if not wrank % num_workers_per_row == 0:  # check if leftmost process
+        print(f"waiting from {rank - 1} for {rank}", flush=True)
         left_data = comm.recv(source=rank - 1)
 
     return left_data, right_data
@@ -224,8 +234,10 @@ def receive_from_vertical_neighbors(rank, num_workers, comm):
     bottom_data = None
 
     if not wrank >= num_workers - num_workers_per_row:
+        print(f"waiting from {rank + num_workers_per_row} for {rank}", flush=True)
         bottom_data = comm.recv(source=rank + num_workers_per_row)
     if not wrank < num_workers_per_row:
+        print(f"waiting from {rank - num_workers_per_row} for {rank}", flush=True)
         top_data = comm.recv(source=rank - num_workers_per_row)
 
     return top_data, bottom_data
@@ -240,12 +252,16 @@ def receive_from_cross_neighbors(rank, num_workers, comm):
     bottom_right_data = None
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
+        print(f"waiting from {rank + num_workers_per_row + 1} for {rank}", flush=True)
         bottom_right_data = comm.recv(source=rank + num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
+        print(f"waiting from {rank - num_workers_per_row - 1} for {rank}", flush=True)
         top_left_data = comm.recv(source=rank - num_workers_per_row - 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
+        print(f"waiting from {rank - num_workers_per_row + 1} for {rank}", flush=True)
         top_right_data = comm.recv(source=rank - num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
+        print(f"waiting from {rank + num_workers_per_row - 1} for {rank}", flush=True)
         bottom_left_data = comm.recv(source=rank + num_workers_per_row - 1)
 
     return top_left_data, top_right_data, bottom_left_data, bottom_right_data
@@ -271,23 +287,28 @@ def communicate(data, rank, num_workers, comm):
     """
 
     num_workers_per_row = int(num_workers ** 0.5)
-    process_row = rank // num_workers_per_row
-    process_col = rank % num_workers_per_row
+    process_row = (rank-1) // num_workers_per_row
+    process_col = (rank-1) % num_workers_per_row
 
     print((process_row, process_col))
     print(point_letter(process_row, process_col))
 
     if point_letter(process_row, process_col) == "A":
-        send_data_to_neighbors(data, rank, num_workers, comm)
 
-        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+        send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
+        send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
+        send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
+
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+        cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
     elif point_letter(process_row, process_col) == "B":
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
-        send_data_to_neighbors(data, rank, num_workers, comm)
+        send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
+        send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
+        send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
 
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
@@ -296,16 +317,20 @@ def communicate(data, rank, num_workers, comm):
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
-        send_data_to_neighbors(data, rank, num_workers, comm)
+        send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
+        send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
+        send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
 
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
     elif point_letter(process_row, process_col) == "D":
-        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
-        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
+        vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
+        horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
-        send_data_to_neighbors(data, rank, num_workers, comm)
+        send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
+        send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
+        send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
 
     return cross_neighbor_data[0], vertical_neighbor_data[0], cross_neighbor_data[1], horizontal_neighbor_data[0], horizontal_neighbor_data[1], cross_neighbor_data[2], vertical_neighbor_data[1], cross_neighbor_data[3] 
 
@@ -479,7 +504,7 @@ def merge_air_units(air1, air2):
     return air1
 
 def _debug_print_arrived(checkpoint):
-    print(f"Reached checkpoint {checkpoint} with worker {rank}")
+    print(f"Reached checkpoint {checkpoint} with worker {rank}", flush=True)
 
 
 def attack_inside_grid(grid, unit_coord, attack_coord):
@@ -601,7 +626,7 @@ if __name__ == "__main__":
         # process the rounds
         for round in range(num_rounds_per_wave):
 
-            # _debug_print_arrived(1)
+            # _debug_print_arrived(1.1)
 
             # 1) movement phase
 
@@ -609,9 +634,9 @@ if __name__ == "__main__":
 
             # communication with neighbors
             data = [worker_grid for _ in range(8)]
-            print("BR")
+            print("BR", flush=True)
             neighbor_grids = communicate(data, rank, num_workers, comm)
-            print("UH")
+            print("UH", flush=True)
             extended_grid = ExtendedGrid(worker_grid, neighbor_grids, rank, num_workers, n)
 
             # 1. Movement Phase (Air Units)
@@ -619,7 +644,7 @@ if __name__ == "__main__":
 
             airs_and_destinations_to_send = [[] for _ in range(8)]
 
-            _debug_print_arrived(2)
+            _debug_print_arrived(1.2)
 
             for air_coords, air_dest in movement_decisions:
 
@@ -663,7 +688,7 @@ if __name__ == "__main__":
 
             # 2) action phase (units either attack or skip, attacks are buffered)
 
-            _debug_print_arrived(20)
+            _debug_print_arrived(2.0)
 
             # handling internal attacks and preparing the inter-process attack data to send to neighbors
 
@@ -708,7 +733,7 @@ if __name__ == "__main__":
                             grid_index = get_grid_index(attack_coord[0], attack_coord[1], n)
                             attacker_and_dest_to_send[grid_index].append((unit, attack_coord))
 
-            _debug_print_arrived(21)
+            _debug_print_arrived(2.1)
 
             incoming_attacks = communicate(attacker_and_dest_to_send, rank, num_workers, comm)
             incoming_attacks = [x for x in incoming_attacks]
@@ -717,7 +742,7 @@ if __name__ == "__main__":
                 if attacked_pixel.type != "Empty" and attacked_pixel.type != attacker.type:
                     attacked_pixel.damage_to_be_taken += attacker.attack
 
-            _debug_print_arrived(22)
+            _debug_print_arrived(2.2)
 
             # apply damage
             for pixel in [unit_list for unit_list in unit_lists]:
@@ -725,6 +750,8 @@ if __name__ == "__main__":
                     if unit.type == "E":
                         # halve damage
                         unit.damage_to_be_taken //= 2
+
+                    # ALL THE MORE SHIT
 
 
 
