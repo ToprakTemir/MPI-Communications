@@ -776,7 +776,6 @@ if __name__ == "__main__":
                         continue
 
                     for attacking_unit, attacking_coord, attacked_coord in incoming_attacks[i]:
-                        print("AAA " + str(attacking_unit), str(attacking_coord), str(attacked_coord), flush=True)
                         attacked_pixel = worker_grid.get(attacked_coord[0], attacked_coord[1])
                         if attacked_pixel.type != "Empty" and attacked_pixel.type != attacking_unit:
 
@@ -795,7 +794,7 @@ if __name__ == "__main__":
                 # every dictionary holds {attacker_coord1: kill_count1, ...}
                 kill_info_to_send = {i: {} for i in range(8)}
 
-                for _, _, unit in all_owned_units:
+                for _, unit in all_owned_units:
                     if unit.damage_to_be_taken == 0:
                         continue
 
@@ -846,7 +845,7 @@ if __name__ == "__main__":
                         fire_unit.attack += 1
 
                 # reset per-round data
-                for unit in all_owned_units:
+                for _, unit in all_owned_units:
                     unit.damage_to_be_taken = 0
                     unit.units_that_attacked_me = []
                     unit.kill_count = 0
@@ -860,7 +859,7 @@ if __name__ == "__main__":
                 # 4) healing phase
                 _debug_print_arrived(4.0)
 
-                for _, _, unit in all_owned_units:
+                for _, unit in all_owned_units:
                     if unit.did_attack is False:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
 
