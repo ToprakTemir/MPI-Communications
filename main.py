@@ -442,6 +442,7 @@ def handle_air_movement(extended_grid):
     for coord in air_unit_coords:
         best_position = coord
         max_attackable = count_attackable_enemies(extended_grid, coord)
+        print("wtf")
         
         pixel = extended_grid.get(coord[0], coord[1])
         # Check all possible movement directions
@@ -469,8 +470,6 @@ def count_attackable_enemies(extended_grid, coord):
     Counts how many enemy units an Air unit can attack from the given position
     """
 
-    n = 3 * extended_grid.n
-
     count = 0
     pixel = extended_grid.get(coord[0], coord[1])
     if pixel.type == "Empty" or pixel.type != 'A':
@@ -481,15 +480,17 @@ def count_attackable_enemies(extended_grid, coord):
         row = coord[0] + drow
         col = coord[1] + dcol
         
-        if 0 <= row < n and 0 <= col < n:
-            if extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
+        
+
+        if -n <= row < 2*n and -n <= col < 2*n:
+            if extended_grid.grids[get_grid_index(row, col, extended_grid.n)] is not None and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                 count += 1
             elif extended_grid.get(row, col).type == "Empty":
                 row += drow
                 col += dcol
-                if 0 <= row < n and 0 <= col < n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
+                if extended_grid.grids[get_grid_index(row, col, extended_grid.n)] is not None and -n <= row < 2*n and -n <= col < 2*n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                     count += 1
-                    
+    print(f"Counted {count} attackable enemies from {coord}", flush=True)
     return count
 
 def merge_air_units(air1, air2):
