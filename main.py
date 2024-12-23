@@ -534,12 +534,14 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     if grid.get(attack_coord[0], attack_coord[1]).type == "Empty":
         return 0
 
+
     attacking_unit = grid.get(unit_coord[0], unit_coord[1])
     attacked_unit = grid.get(attack_coord[0], attack_coord[1])
 
     if attacked_unit.type == attacking_unit.type:
         return -1
 
+    print(f"Attacking {attack_coord} from {unit_coord} which is a {attacking_unit} type", flush=True)
     attacked_unit.damage_to_be_taken += attacking_unit.attack
     attacking_unit.did_attack = True
     attacked_unit.units_that_attacked_me.append((unit_coord[0], unit_coord[1]))
@@ -748,35 +750,46 @@ if __name__ == "__main__":
                         if unit.type != "Empty":
                             all_owned_units.append(((i, j), unit))
 
+
                 attacker_and_dest_to_send = [[] for _ in range(8)]
                 for coord, unit in all_owned_units:
+
+                    if coord == (5, 5):
+                        print(f"unit {unit.type} is at {coord} and has {unit.health} health left")
 
                     if unit.health < unit.max_health / 2:
                         continue
 
                     # air units, which needs extra check for the extra attack length
                     if unit.type == 'A':
+
+                        print(f"{coord} is here")
                         for direction in unit.attack_directions:
+                            print(f"{coord} is inside loop")
+
                             dx, dy = direction
                             attack_coord = [coord[0] + dx, coord[1] + dy]
                             far_attack_coord = [coord[0] + 2*dx, coord[1] + 2*dy]
 
                             if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
+
+                                print(f"{coord} is insider")
+
                                 try_close_attack = attack_inside_grid(worker_grid, coord, attack_coord)
 
                                 # continue if attacked cell is not empty
-                                if try_close_attack == 1 or try_close_attack == -1:
+                                if try_close_attack != 0:
                                     continue
 
                                 # continue if far attack is still inside own grid
                                 if 0 <= far_attack_coord[0] < n and 0 <= far_attack_coord[1] < n:
+
+                                    print(f"{coord} is inside far")
                                     try_far_attack = attack_inside_grid(worker_grid, coord, far_attack_coord)
                                     continue
 
                             # send attack data to neighbor grid
                             grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
-
-
 
                             coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
                             far_coord_rel_to_receiver = coords_relative_to_grid_index(far_attack_coord[0], far_attack_coord[1], grid_index, n)
@@ -838,6 +851,7 @@ if __name__ == "__main__":
                     if unit.type == 'E': # earth type, takes half damage
                         unit.damage_to_be_taken //= 2
                     unit.health -= unit.damage_to_be_taken
+                    print(f"unit {unit.type} takes {unit.damage_to_be_taken} damage and has {unit.health} health left")
 
                     if unit.health > 0:
                         continue
@@ -895,7 +909,8 @@ if __name__ == "__main__":
                 # 4) healing phase
                 # _debug_print_arrived(4.0)
 
-                for _, unit in all_owned_units:
+                for coord, unit in all_owned_units:
+                    print(f"unit {unit.type} is at {coord} has attack: {unit.did_attack} and health: {unit.health}")
                     if unit.did_attack is False:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
                 
@@ -1017,7 +1032,6 @@ if __name__ == "__main__":
                     spawn_locations.add(new_water_spawn)
 
             for water_spawns in spawn_locations:
-                print(water_spawns)
                 worker_grid.set(water_spawns[0], water_spawns[1], init_water())
 
             # _debug_print_arrived(5.2)
