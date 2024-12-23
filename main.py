@@ -366,16 +366,17 @@ class ExtendedGrid:
         elif top:
             ret = self.grids[1].get(row + n, col)
         elif left and bottom:
-            ret = self.grids[5].get(row - n, col + n)
+            ret = self.grids[6].get(row - n, col + n)
         elif right and bottom:
-            ret = self.grids[7].get(row - n, col - n)
+            ret = self.grids[8].get(row - n, col - n)
         elif bottom:
-            ret = self.grids[6].get(row - n, col)
+            ret = self.grids[7].get(row - n, col)
         elif left:
             ret = self.grids[3].get(row, col + n)
         elif right:
-            ret = self.grids[4].get(row, col - n)
-
+            ret = self.grids[5].get(row, col - n)
+        else:
+            ret = self.grids[4].get(row, col)
         return ret
 
 def coords_relative_to_grid_index(row, col, grid_index, n):
