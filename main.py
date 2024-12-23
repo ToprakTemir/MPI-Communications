@@ -542,14 +542,9 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     if attacked_unit.type == attacking_unit.type:
         return -1
 
-    if attacking_unit.type == "F":
-        print("fire attack is " + str(attacking_unit.attack))
-
-    print(f"Attacking {attack_coord} from {unit_coord} which is a {attacking_unit.type} type", flush=True)
     attacked_unit.damage_to_be_taken += attacking_unit.attack
     attacking_unit.did_attack = True
     attacked_unit.units_that_attacked_me.append((unit_coord[0], unit_coord[1]))
-    print("aaa  " + attacking_unit.type)
     return 1
 
 
@@ -673,7 +668,6 @@ if __name__ == "__main__":
 
             # process the rounds
 
-            round_printing("Round 0 (Initialization):", worker_grid)
             for round in range(num_rounds_per_wave):
 
                 # _debug_print_arrived(1.1)
@@ -759,9 +753,6 @@ if __name__ == "__main__":
                 attacker_and_dest_to_send = [[] for _ in range(8)]
                 for coord, unit in all_owned_units:
 
-                    if coord == (5, 5):
-                        print(f"unit {unit.type} is at {coord} and has {unit.health} health left")
-
                     if unit.health < unit.max_health / 2:
                         continue
 
@@ -844,24 +835,24 @@ if __name__ == "__main__":
                 # every dictionary holds {attacker_coord1: kill_count1, ...}
                 kill_info_to_send = {i: {} for i in range(8)}
 
-                for _, unit in all_owned_units:
+                for coordsUnit, unit in all_owned_units:
                     if unit.damage_to_be_taken == 0:
                         continue
 
                     if unit.type == 'E': # earth type, takes half damage
                         unit.damage_to_be_taken //= 2
                     unit.health -= unit.damage_to_be_taken
-                    print(f"unit {unit.type} takes {unit.damage_to_be_taken} damage and has {unit.health} health left")
+
+                    attackers = [(worker_grid.get(attacker[0], attacker[1]).type, attacker, (worker_grid.get(attacker[0], attacker[1]).attack)) for attacker in unit.units_that_attacked_me]
+                    print(f"Unit {unit.type} at {coordsUnit} took {unit.damage_to_be_taken} damage from {attackers}, HP: {unit.health}", flush=True)
 
                     if unit.health > 0:
                         continue
 
                     # unit is dead
                     for attacking_coord in unit.units_that_attacked_me:
-                        print("hereherehrehreh", attacking_coord)
                         if 0 <= attacking_coord[0] < n and 0 <= attacking_coord[1] < n: # attacker is owned by grid
                             attacker = worker_grid.get(attacking_coord[0], attacking_coord[1])
-                            print(attacker.type)
                             attacker.kill_count += 1
                             continue
 
@@ -887,8 +878,6 @@ if __name__ == "__main__":
 
                     for attacker_coords, kill_count in incoming_kill_info[i].items():
                         attacker = worker_grid.get(attacker_coords[0], attacker_coords[1])
-                        if attacker_coords == (5, 5):
-                            print("HERE AMK HERE")
                         attacker.did_attack = True
                         attacker.kill_count += kill_count
 
@@ -896,34 +885,33 @@ if __name__ == "__main__":
 
                 # increase attack of fire units
                 for fire_unit in worker_grid.fire_units.values():
-                    print("fire unit kill count is" + str(fire_unit.kill_count))
-                    if fire_unit.kill_count > 0 and fire_unit.attack <= 6:
+                    if fire_unit.kill_count > 0 and fire_unit.attack < 6:
                         fire_unit.attack += 1
 
+                
+
+                # 4) healing phase
+                # _debug_print_arrived(4.0)
+
+                for coord, unit in all_owned_units:
+                    if not unit.did_attack:
+                        unit.health = min(unit.health + unit.heal_rate, unit.max_health)
+                        print(f"Unit {unit.type} with attack {unit.attack} at {coord} healed, HP: {unit.health}", flush=True)
+
+            
                 # reset per-round data
                 for coordinate, unit in all_owned_units:
                     unit.damage_to_be_taken = 0
                     unit.units_that_attacked_me = []
                     unit.kill_count = 0
+                    unit.did_attack = False
                     if unit.health <= 0:
                         worker_grid.set(coordinate[0], coordinate[1], EMPTY_UNIT)
                         all_owned_units.remove((coordinate, unit))
 
 
 
-                # 4) healing phase
-                # _debug_print_arrived(4.0)
-
-                for coord, unit in all_owned_units:
-                    print(f"unit {unit.type} is at {coord} has attack: {unit.did_attack} and health: {unit.health}")
-                    if not unit.did_attack:
-                        unit.health = min(unit.health + unit.heal_rate, unit.max_health)
-
-                # reset per round data
-                for _, unit in all_owned_units:
-                    unit.did_attack = False
-                
-                round_printing(f"Round {round + 1} (End):", worker_grid)
+                round_printing(f"Round {round + 1} (End): (before water cloning)", worker_grid)
 
             # reset per-wave data (attack of fire units)
 
@@ -1049,4 +1037,4 @@ if __name__ == "__main__":
 
             comm.send(worker_grid, dest=0)
 
-            _debug_print_arrived("END")
+            # _debug_print_arrived("END")
