@@ -520,7 +520,7 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
 
     attacked_unit.damage_to_be_taken += attacking_unit.attack
     attacking_unit.did_attack = True
-    attacked_unit.units_that_attacked_me.append(attacking_unit)
+    attacked_unit.units_that_attacked_me.append((unit_coord[0], unit_coord[1]))
     return 1
 
 
@@ -806,7 +806,7 @@ if __name__ == "__main__":
                         continue
 
                     # unit is dead
-                    for attacking_coord in unit.units_that_attacked_me:
+                    for attacking_unit in unit.units_that_attacked_me:
                         if 0 <= attacking_coord[0] < n and 0 <= attacking_coord[1] < n: # attacker is owned by grid
                             attacker = worker_grid.get(attacking_coord[0], attacking_coord[1])
                             attacker.kill_count += 1
@@ -845,13 +845,13 @@ if __name__ == "__main__":
                         fire_unit.attack += 1
 
                 # reset per-round data
-                for _, unit in all_owned_units:
+                for coordinate, unit in all_owned_units:
                     unit.damage_to_be_taken = 0
                     unit.units_that_attacked_me = []
                     unit.kill_count = 0
                     if unit.health <= 0:
-                        worker_grid.set(unit[0], unit[1], EMPTY_UNIT)
-                        all_owned_units.remove(unit)
+                        worker_grid.set(coordinate[0], coordinate[1], EMPTY_UNIT)
+                        all_owned_units.remove((coordinate, unit))
 
 
                 print(str(worker_grid), flush=True)
