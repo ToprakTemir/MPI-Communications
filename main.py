@@ -421,17 +421,17 @@ def get_grid_index(row, col, n):
     elif top:
         return 1
     elif left and bottom:
-        return 5
-    elif right and bottom:
-        return 7
-    elif bottom:
         return 6
+    elif right and bottom:
+        return 8
+    elif bottom:
+        return 7
     elif left:
         return 3
     elif right:
-        return 4
+        return 5
     else:
-        raise ValueError(f"The given coordinates {row, col} are not on the border of the grid.")
+        return 4
 
 def handle_air_movement(extended_grid):
     """
