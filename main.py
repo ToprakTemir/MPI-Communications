@@ -172,11 +172,11 @@ def send_to_horizontal_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank % num_workers_per_row == 0:  # check if leftmost process
-        print(f"sending from {rank} to {rank - 1}", flush=True)
+        # print(f"sending from {rank} to {rank - 1}", flush=True)
         comm.send(data[0], dest=rank - 1)
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
-        print(f"sending from {rank} to {rank + 1}", flush=True)
+        # print(f"sending from {rank} to {rank + 1}", flush=True)
         comm.send(data[1], dest=rank + 1)
     
 
@@ -185,10 +185,10 @@ def send_to_vertical_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank < num_workers_per_row:
-        print(f"sending from {rank} to {rank - num_workers_per_row}", flush=True)
+        # print(f"sending from {rank} to {rank - num_workers_per_row}", flush=True)
         comm.send(data[0], dest=rank - num_workers_per_row)
     if not wrank >= num_workers - num_workers_per_row:
-        print(f"sending from {rank} to {rank + num_workers_per_row}", flush=True)
+        # print(f"sending from {rank} to {rank + num_workers_per_row}", flush=True)
         comm.send(data[1], dest=rank + num_workers_per_row)
     
 
@@ -197,16 +197,16 @@ def send_to_cross_neighbors(data, rank, num_workers, comm):
     wrank = rank - 1  # only the worker ranks are considered
 
     if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
-        print(f"sending from {rank} to {rank - num_workers_per_row - 1}", flush=True)
+        # print(f"sending from {rank} to {rank - num_workers_per_row - 1}", flush=True)
         comm.send(data[0], dest=rank - num_workers_per_row - 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
-        print(f"sending from {rank} to {rank - num_workers_per_row + 1}", flush=True)
+        # print(f"sending from {rank} to {rank - num_workers_per_row + 1}", flush=True)
         comm.send(data[1], dest=rank - num_workers_per_row + 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
-        print(f"sending from {rank} to {rank + num_workers_per_row + 1}", flush=True)
+        # print(f"sending from {rank} to {rank + num_workers_per_row + 1}", flush=True)
         comm.send(data[2], dest=rank + num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
-        print(f"sending from {rank} to {rank + num_workers_per_row - 1}", flush=True)
+        # print(f"sending from {rank} to {rank + num_workers_per_row - 1}", flush=True)
         comm.send(data[3], dest=rank + num_workers_per_row - 1)
     
     
@@ -220,10 +220,10 @@ def receive_from_horizontal_neighbors(rank, num_workers, comm):
     right_data = None
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1:  # check if rightmost process
-        print(f"waiting from {rank + 1} for {rank}", flush=True)
+        # print(f"waiting from {rank + 1} for {rank}", flush=True)
         right_data = comm.recv(source=rank + 1)
     if not wrank % num_workers_per_row == 0:  # check if leftmost process
-        print(f"waiting from {rank - 1} for {rank}", flush=True)
+        # print(f"waiting from {rank - 1} for {rank}", flush=True)
         left_data = comm.recv(source=rank - 1)
 
     return left_data, right_data
@@ -236,10 +236,10 @@ def receive_from_vertical_neighbors(rank, num_workers, comm):
     bottom_data = None
 
     if not wrank >= num_workers - num_workers_per_row:
-        print(f"waiting from {rank + num_workers_per_row} for {rank}", flush=True)
+        # print(f"waiting from {rank + num_workers_per_row} for {rank}", flush=True)
         bottom_data = comm.recv(source=rank + num_workers_per_row)
     if not wrank < num_workers_per_row:
-        print(f"waiting from {rank - num_workers_per_row} for {rank}", flush=True)
+        # print(f"waiting from {rank - num_workers_per_row} for {rank}", flush=True)
         top_data = comm.recv(source=rank - num_workers_per_row)
 
     return top_data, bottom_data
@@ -254,16 +254,16 @@ def receive_from_cross_neighbors(rank, num_workers, comm):
     bottom_right_data = None
 
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank >= num_workers - num_workers_per_row:
-        print(f"waiting from {rank + num_workers_per_row + 1} for {rank}", flush=True)
+        # print(f"waiting from {rank + num_workers_per_row + 1} for {rank}", flush=True)
         bottom_right_data = comm.recv(source=rank + num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank < num_workers_per_row:
-        print(f"waiting from {rank - num_workers_per_row - 1} for {rank}", flush=True)
+        # print(f"waiting from {rank - num_workers_per_row - 1} for {rank}", flush=True)
         top_left_data = comm.recv(source=rank - num_workers_per_row - 1)
     if not wrank % num_workers_per_row == num_workers_per_row - 1 and not wrank < num_workers_per_row:
-        print(f"waiting from {rank - num_workers_per_row + 1} for {rank}", flush=True)
+        # print(f"waiting from {rank - num_workers_per_row + 1} for {rank}", flush=True)
         top_right_data = comm.recv(source=rank - num_workers_per_row + 1)
     if not wrank % num_workers_per_row == 0 and not wrank >= num_workers - num_workers_per_row:
-        print(f"waiting from {rank + num_workers_per_row - 1} for {rank}", flush=True)
+        # print(f"waiting from {rank + num_workers_per_row - 1} for {rank}", flush=True)
         bottom_left_data = comm.recv(source=rank + num_workers_per_row - 1)
 
     return top_left_data, top_right_data, bottom_left_data, bottom_right_data
@@ -272,12 +272,6 @@ def receive_from_cross_neighbors(rank, num_workers, comm):
 def point_letter(row, column):
     l = ["AB", "CD"]
     return l[row%2][column%2]
-
-def send_data_to_neighbors(data, rank, num_workers, comm):
-    send_to_cross_neighbors([data[0], data[2], data[5], data[7]], rank, num_workers, comm)
-    send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
-    send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
-    
 
 def communicate(data, rank, num_workers, comm):
     """
@@ -292,9 +286,11 @@ def communicate(data, rank, num_workers, comm):
     process_row = (rank-1) // num_workers_per_row
     process_col = (rank-1) % num_workers_per_row
 
-    print((process_row, process_col), point_letter(process_row, process_col), flush=True)
+    # print((process_row, process_col), point_letter(process_row, process_col), flush=True)
 
-    if point_letter(process_row, process_col) == "A":
+    label = point_letter(process_row, process_col) # either A, B, C or D
+
+    if label == "A":
 
         send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
         send_to_vertical_neighbors([data[1], data[6]], rank, num_workers, comm)
@@ -304,7 +300,7 @@ def communicate(data, rank, num_workers, comm):
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
-    elif point_letter(process_row, process_col) == "B":
+    elif label == "B":
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
         send_to_horizontal_neighbors([data[3], data[4]], rank, num_workers, comm)
@@ -314,7 +310,7 @@ def communicate(data, rank, num_workers, comm):
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
 
-    elif point_letter(process_row, process_col) == "C":
+    elif label == "C":
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
 
@@ -324,7 +320,7 @@ def communicate(data, rank, num_workers, comm):
 
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
 
-    elif point_letter(process_row, process_col) == "D":
+    elif label == "D":
         cross_neighbor_data = receive_from_cross_neighbors(rank, num_workers, comm)
         vertical_neighbor_data = receive_from_vertical_neighbors(rank, num_workers, comm)
         horizontal_neighbor_data = receive_from_horizontal_neighbors(rank, num_workers, comm)
@@ -594,7 +590,7 @@ if __name__ == "__main__":
 
             # 2) distribute each wave to workers
 
-            _debug_print_arrived(0)
+            # _debug_print_arrived(0)
 
             for worker_rank in range(1, num_workers + 1):
 
@@ -638,9 +634,7 @@ if __name__ == "__main__":
 
             # communication with neighbors
             data = [worker_grid for _ in range(8)]
-            print("BR", flush=True)
             neighbor_grids = communicate(data, rank, num_workers, comm)
-            print("UH", flush=True)
             extended_grid = ExtendedGrid(worker_grid, neighbor_grids, rank, num_workers, n)
 
             # 1. Movement Phase (Air Units)
@@ -677,7 +671,15 @@ if __name__ == "__main__":
 
 
             incoming_air_destinations = communicate(airs_and_destinations_to_send, rank, num_workers, comm)
-            incoming_air_destinations = [x for x in incoming_air_destinations]
+            # print(f"before merging: {incoming_air_destinations}")
+            incoming_air_destinations = [x for x in incoming_air_destinations if x is not None]
+            # print(f"after merging: {incoming_air_destinations}")
+
+            for x in incoming_air_destinations:
+                if not x:
+                    incoming_air_destinations.remove(x)
+
+            print(incoming_air_destinations)
 
             for air_unit, air_dest in incoming_air_destinations:
                 if worker_grid.get(air_dest[0], air_dest[1]).type == "Empty":
