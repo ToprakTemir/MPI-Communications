@@ -885,6 +885,8 @@ if __name__ == "__main__":
 
                     for attacker_coords, kill_count in incoming_kill_info[i].items():
                         attacker = worker_grid.get(attacker_coords[0], attacker_coords[1])
+                        if attacker_coords == (5, 5):
+                            print("HERE AMK HERE")
                         attacker.did_attack = True
                         attacker.kill_count += kill_count
 
@@ -913,6 +915,10 @@ if __name__ == "__main__":
                     print(f"unit {unit.type} is at {coord} has attack: {unit.did_attack} and health: {unit.health}")
                     if unit.did_attack is False:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
+
+                # reset per round data
+                for _, unit in all_owned_units:
+                    unit.did_attack = False
                 
                 round_printing(f"Round {round + 1} (End):", worker_grid)
 
