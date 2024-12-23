@@ -91,12 +91,29 @@ class Grid:
             raise ValueError("Index out of bounds of the grid.")
 
     def set(self, i, j, unit):
-        self.grid[i][j] = unit
 
+        
         if unit is None:
             raise ValueError("Pixel cannot be None")
 
-        if unit.type == "Empty":
+        old_unit = self.grid[i][j] 
+        self.grid[i][j] = unit
+
+        if old_unit.type != "Empty":
+            if old_unit.type == "A":
+                self.num_air -= 1
+                del self.air_units[(i, j)]
+            elif old_unit.type == "F":
+                self.num_fire -= 1
+                del self.fire_units[(i, j)]
+            elif old_unit.type == "W":
+                self.num_water -= 1
+                del self.water_units[(i, j)]
+            elif old_unit.type == "E":
+                self.num_earth -= 1
+                del self.earth_units[(i, j)]
+    
+        if unit.type != "Empty":
             if unit.type == "A":
                 self.num_air += 1
                 self.air_units[(i, j)] = unit
@@ -109,20 +126,6 @@ class Grid:
             elif unit.type == "E":
                 self.num_earth += 1
                 self.earth_units[(i, j)] = unit
-
-        else: # then (i, j) is being deleted
-            if (i, j) in self.air_units:
-                self.num_air -= 1
-                del self.air_units[(i, j)]
-            elif (i, j) in self.fire_units:
-                self.num_fire -= 1
-                del self.fire_units[(i, j)]
-            elif (i, j) in self.water_units:
-                self.num_water -= 1
-                del self.water_units[(i, j)]
-            elif (i, j) in self.earth_units:
-                self.num_earth -= 1
-                del self.earth_units[(i, j)]
 
 
 
@@ -442,7 +445,6 @@ def handle_air_movement(extended_grid):
     for coord in air_unit_coords:
         best_position = coord
         max_attackable = count_attackable_enemies(extended_grid, coord)
-        print("wtf")
         
         pixel = extended_grid.get(coord[0], coord[1])
         # Check all possible movement directions
@@ -595,6 +597,7 @@ if __name__ == "__main__":
 
             # _debug_print_arrived(0)
 
+            print(main_grid.air_units, flush=True)
             for worker_rank in range(1, num_workers + 1):
 
                 # these worker x, y values are the x, y values of processors in the processor-grid
