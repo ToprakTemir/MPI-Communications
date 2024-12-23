@@ -524,6 +524,11 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
     return 1
 
 
+def round_printing(string, grid):
+    string += "\n"
+    print(string)
+    print(str(grid))
+
 
 if __name__ == "__main__":
 
@@ -626,13 +631,17 @@ if __name__ == "__main__":
 
 
     else: # worker
+        i = 1
         while True:
+            print(f"Wave {i}:")
 
             worker_grid, N, n, num_rounds_per_wave = comm.recv(source=0)
             if worker_grid == "Kill":
                 break
 
             # process the rounds
+
+            round_printing("Round 0 (Initialization):", worker_grid)
             for round in range(num_rounds_per_wave):
 
                 # _debug_print_arrived(1.1)
@@ -851,7 +860,6 @@ if __name__ == "__main__":
                         all_owned_units.remove((coordinate, unit))
 
 
-                print(str(worker_grid), flush=True)
 
                 # 4) healing phase
                 _debug_print_arrived(4.0)
@@ -859,7 +867,8 @@ if __name__ == "__main__":
                 for _, unit in all_owned_units:
                     if unit.did_attack is False:
                         unit.health = min(unit.health + unit.heal_rate, unit.max_health)
-
+                
+                round_printing(f"Round {round + 1} (End):", worker_grid)
 
             # reset per-wave data (attack of fire units)
 
