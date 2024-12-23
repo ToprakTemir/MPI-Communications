@@ -421,17 +421,17 @@ def get_grid_index(row, col, n):
     elif top:
         return 1
     elif left and bottom:
-        return 6
+        return 5
     elif right and bottom:
-        return 8
-    elif bottom:
         return 7
+    elif bottom:
+        return 6
     elif left:
         return 3
     elif right:
-        return 5
-    else:
         return 4
+    else:
+        return 10
 
 def handle_air_movement(extended_grid):
     """
@@ -452,7 +452,13 @@ def handle_air_movement(extended_grid):
         for dx, dy in pixel.attack_directions:
             new_x = coord[0] + dx
             new_y = coord[1] + dy
-            
+            grid_i = get_grid_index(new_x, new_y, extended_grid.n)
+            if grid_i >= 4:
+                grid_i += 1
+            if grid_i == 11:
+                grid_i = 4
+            if extended_grid.grids[grid_i] is None:
+                continue
             if extended_grid.get(new_x, new_y).type == "Empty":
                 attackable = count_attackable_enemies(extended_grid, (new_x, new_y))
                 
@@ -475,25 +481,36 @@ def count_attackable_enemies(extended_grid, coord):
 
     count = 0
     pixel = extended_grid.get(coord[0], coord[1])
-    if pixel.type == "Empty" or pixel.type != 'A':
-        return 0
         
     # Check all directions including diagonals
-    for drow, dcol in pixel.attack_directions:
+    for drow, dcol in [(1, 0), (0, 1), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, -1), (-1, 1)]:
         row = coord[0] + drow
         col = coord[1] + dcol
         
         
 
         if -n <= row < 2*n and -n <= col < 2*n:
-            if extended_grid.grids[get_grid_index(row, col, extended_grid.n)] is not None and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
+
+            grid_i = get_grid_index(row, col, extended_grid.n)
+            if grid_i >= 4:
+                grid_i += 1
+            if grid_i == 11:
+                grid_i = 4
+
+            if extended_grid.grids[grid_i] is None:
+                continue
+            if extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                 count += 1
             elif extended_grid.get(row, col).type == "Empty":
                 row += drow
                 col += dcol
-                if extended_grid.grids[get_grid_index(row, col, extended_grid.n)] is not None and -n <= row < 2*n and -n <= col < 2*n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
+                grid_i = get_grid_index(row, col, extended_grid.n)
+                if grid_i >= 4:
+                    grid_i += 1
+                if grid_i == 11:
+                    grid_i = 4
+                if extended_grid.grids[grid_i] is not None and -n <= row < 2*n and -n <= col < 2*n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                     count += 1
-    print(f"Counted {count} attackable enemies from {coord}", flush=True)
     return count
 
 def merge_air_units(air1, air2):
@@ -752,6 +769,9 @@ if __name__ == "__main__":
 
                             # send attack data to neighbor grid
                             grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
+
+                            
+
                             coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
                             far_coord_rel_to_receiver = coords_relative_to_grid_index(far_attack_coord[0], far_attack_coord[1], grid_index, n)
                             attacker_and_dest_to_send[grid_index].append(
@@ -851,7 +871,7 @@ if __name__ == "__main__":
                 # _debug_print_arrived(3.2)
 
                 # increase attack of fire units
-                for fire_unit in worker_grid.fire_units:
+                for fire_coord, fire_unit in worker_grid.fire_units.items():
                     if fire_unit.kill_count > 0 and fire_unit.attack < FIRE_ATTACK + 6:
                         fire_unit.attack += 1
 
@@ -877,7 +897,7 @@ if __name__ == "__main__":
 
             # reset per-wave data (attack of fire units)
 
-            for fire_unit in worker_grid.fire_units:
+            for fire_coords, fire_unit in worker_grid.fire_units.items():
                 fire_unit.attack = FIRE_ATTACK
 
 
