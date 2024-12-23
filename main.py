@@ -946,8 +946,8 @@ if __name__ == "__main__":
                 col = water_coord[1]
 
                 cell_to_spawn = EMPTY_UNIT
-                spawn_row = 0
-                spawn_col = 0
+                spawn_row = -999999
+                spawn_col = -999999
 
                 for drow in [-1, 0, 1]:
                     for dcol in [-1, 0, 1]:
