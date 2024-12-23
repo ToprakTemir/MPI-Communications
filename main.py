@@ -602,7 +602,6 @@ if __name__ == "__main__":
                         if worker_grid.get(row - top, col - left).type == "Empty":
                             worker_grid.set(row - top, col - left, main_grid.get(row, col))
 
-                print(f"worker_grid: \n{worker_grid}", flush=True)
                 comm.send([worker_grid, N, n, num_rounds_per_wave], dest=worker_rank)
 
 
@@ -684,13 +683,13 @@ if __name__ == "__main__":
 
 
                 incoming_air_destinations = communicate(airs_and_destinations_to_send, rank, num_workers, comm)
-                incoming_air_destinations = [x for x in incoming_air_destinations if x is not None]
+                incoming_air_destinations = [x for x in incoming_air_destinations if (x is not None and x != [])]
 
-                non_empty_destinations = []
-                for i in range(len(incoming_air_destinations)):
-                    if incoming_air_destinations[i] != []:
-                        non_empty_destinations.append((i, incoming_air_destinations[i]))
-                incoming_air_destinations = non_empty_destinations
+                # non_empty_destinations = []
+                # for i in range(len(incoming_air_destinations)):
+                #     if incoming_air_destinations[i] != []:
+                #         non_empty_destinations.append(())
+                # incoming_air_destinations = non_empty_destinations
 
                 for air_unit, air_dest in incoming_air_destinations:
                     if worker_grid.get(air_dest[0], air_dest[1]).type == "Empty":
@@ -777,6 +776,7 @@ if __name__ == "__main__":
                         continue
 
                     for attacking_unit, attacking_coord, attacked_coord in incoming_attacks[i]:
+                        print("AAA" + str(attacking_unit), str(attacking_coord), str(attacked_coord), flush=True)
                         attacked_pixel = worker_grid.get(attacked_coord[0], attacked_coord[1])
                         if attacked_pixel.type != "Empty" and attacked_pixel.type != attacking_unit:
 
