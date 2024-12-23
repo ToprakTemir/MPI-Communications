@@ -27,13 +27,15 @@ class Unit:
     def __init__(self, type, health, attack, heal_rate, attack_directions):
         self.type = type
         self.health = health
+        self.max_health = health
         self.attack = attack
         self.heal_rate = heal_rate
         self.attack_directions = attack_directions
 
         self.damage_to_be_taken = 0
+        self.units_that_attacked_me = []
         self.did_attack = False
-        self.did_kill = False
+        self.kill_count = 0
 
 
 def init_earth():
@@ -519,10 +521,13 @@ def attack_inside_grid(grid, unit_coord, attack_coord):
 
     attacking_unit = grid.get(unit_coord[0], unit_coord[1])
     attacked_unit = grid.get(attack_coord[0], attack_coord[1])
+
     if attacked_unit.type == attacking_unit.type:
         return -1
 
     attacked_unit.damage_to_be_taken += attacking_unit.unit.attack
+    attacking_unit.did_attack = True
+    attacked_unit.units_that_attacked_me.append(attacking_unit)
     return 1
 
 
@@ -685,100 +690,263 @@ if __name__ == "__main__":
                     )
                     worker_grid.set(air_dest[0], air_dest[1], new_unit)
 
-            # 2) action phase (units either attack or skip, attacks are buffered)
+
+
+            # 2) action phase (units either buffer attacks or skip)
 
             _debug_print_arrived(2.0)
 
             # handling internal attacks and preparing the inter-process attack data to send to neighbors
 
-            unit_lists = [
-                worker_grid.air_units,
-                worker_grid.fire_units,
-                worker_grid.water_units,
-                worker_grid.earth_units
-            ]
+            all_owned_units = worker_grid.air_units + worker_grid.water_units + worker_grid.fire_units + worker_grid.earth_units
 
             attacker_and_dest_to_send = [[] for _ in range(8)]
-            for unit_of_single_type in unit_lists:
-                for coord, unit in unit_of_single_type:
+            for coord, unit in all_owned_units:
 
-                    if unit.type == 'A':
-                        for direction in unit.attack_directions:
-                            dx, dy = direction
-                            attack_coord = [coord[0] + dx, coord[1] + dy]
-                            far_attack_coord = [coord[0] + 2*dx, coord[1] + 2*dy]
-                            if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
+                # air units, which needs extra check for the extra attack length
+                if unit.type == 'A':
+                    for direction in unit.attack_directions:
+                        dx, dy = direction
+                        attack_coord = [coord[0] + dx, coord[1] + dy]
+                        far_attack_coord = [coord[0] + 2*dx, coord[1] + 2*dy]
 
-                                try_close_attack = attack_inside_grid(worker_grid, coord, attack_coord)
-                                if try_close_attack == -1:
-                                    continue
-                                if try_close_attack == 1:
-                                    unit.did_attack = True
-                                    continue
+                        if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
+                            try_close_attack = attack_inside_grid(worker_grid, coord, attack_coord)
 
-                                if 0 <= far_attack_coord[0] < n and 0 <= far_attack_coord[1] < n:
-                                    attack_inside_grid(worker_grid, coord, far_attack_coord)
-                                else:
-                                    grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
-                                    attacker_and_dest_to_send[grid_index].append((unit, far_attack_coord))
+                            # continue if attacked cell is not empty
+                            if try_close_attack == 1 or try_close_attack == -1:
+                                continue
+
+                            # continue if far attack is still inside own grid
+                            if 0 <= far_attack_coord[0] < n and 0 <= far_attack_coord[1] < n:
+                                try_far_attack = attack_inside_grid(worker_grid, coord, far_attack_coord)
+                                continue
+
+                        # send attack data to neighbor grid
+                        grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
+                        coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
+                        far_coord_rel_to_receiver = coords_relative_to_grid_index(far_attack_coord[0], far_attack_coord[1], grid_index, n)
+                        attacker_and_dest_to_send[grid_index].append(
+                            (unit, coord_rel_to_receiver, far_coord_rel_to_receiver)
+                        )
+
+                    continue
+
+                # non-air units
+                attack_coords = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
+                for attack_coord in attack_coords:
+
+                    if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
+                        attack_inside_grid(worker_grid, coord, attack_coord)
                         continue
 
-                    # below is non-air units
-                    attack_coords = [[unit[0] + dx, unit[1] + dy] for dx, dy in unit.attack_directions]
-                    for attack_coord in attack_coords:
-                        if 0 <= attack_coord[0] < n and 0 <= attack_coord[1] < n:
-                            attack_inside_grid(worker_grid, coord, attack_coord)
-                        else:
-                            grid_index = get_grid_index(attack_coord[0], attack_coord[1], n)
-                            attacker_and_dest_to_send[grid_index].append((unit, attack_coord))
+                    grid_index = get_grid_index(attack_coord[0], attack_coord[1], n)
+                    coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
+                    far_coord_rel_to_receiver = coords_relative_to_grid_index(attack_coord[0], attack_coord[1], grid_index, n)
+                    attacker_and_dest_to_send[grid_index].append(
+                        (unit, coord_rel_to_receiver, far_coord_rel_to_receiver)
+                    )
 
             _debug_print_arrived(2.1)
 
             incoming_attacks = communicate(attacker_and_dest_to_send, rank, num_workers, comm)
-            incoming_attacks = [x for x in incoming_attacks]
-            for attacker, coord in incoming_attacks:
-                attacked_pixel = worker_grid.get(coord[0], coord[1])
-                if attacked_pixel.type != "Empty" and attacked_pixel.type != attacker.type:
-                    attacked_pixel.damage_to_be_taken += attacker.attack
-
-            _debug_print_arrived(2.2)
-
-            # apply damage
-            for pixel in [unit_list for unit_list in unit_lists]:
-                for coord, unit in pixel:
-                    if unit.type == "E":
-                        # halve damage
-                        unit.damage_to_be_taken //= 2
-
-                    # ALL THE MORE SHIT
 
 
+            # [[list of units that attacked somewhere successfully in this grid], ... for all 8 neighbors]
+            attack_info_to_send = {i: [] for i in range(8)}
 
+            for i in range(8):
+                for attacking_unit, attacking_coord, attacked_coord in incoming_attacks[i]:
+                    attacked_pixel = worker_grid.get(attacked_coord[0], attacked_coord[1])
+                    if attacked_pixel.type != "Empty" and attacked_pixel.type != attacking_unit:
 
+                        attacked_pixel.damage_to_be_taken += attacking_unit.attack
+                        attacked_pixel.units_that_attacked_me.append(attacking_coord)
 
-
-
-
+                        attacking_coord_rel_to_attacker = coords_relative_to_grid_index(attacking_coord[0], attacking_coord[1], i, n)
+                        attack_info_to_send[i].append(attacking_coord_rel_to_attacker)
 
 
 
             # 3) resolution phase (apply the buffered attacks)
 
-                # if a unit attacked by fire units dies, every fire unit gets a buff
+            _debug_print_arrived(3.0)
+
+            # every dictionary holds {attacker_coord1: kill_count1, ...}
+            kill_info_to_send = {i: {} for i in range(8)}
+
+            for unit in all_owned_units:
+                if unit.damage_to_be_taken == 0:
+                    continue
+
+                if unit.type == 'E': # earth type, takes half damage
+                    unit.damage_to_be_taken //= 2
+                unit.health -= unit.damage_to_be_taken
+
+                if unit.health > 0:
+                    continue
+
+                # unit is dead
+                for attacking_coord in unit.units_that_attacked_me:
+                    if 0 <= attacking_coord[0] < n and 0 <= attacking_coord[1] < n: # attacker is owned by grid
+                        attacker = worker_grid.get(attacking_coord[0], attacking_coord[1])
+                        attacker.kill_count += 1
+                        continue
+
+                    # attacker is in another grid
+                    grid_index = get_grid_index(attacking_coord[0], attacking_coord[1], n)
+                    attacking_coord_rel_to_receiver = coords_relative_to_grid_index(attacking_coord[0], attacking_coord[1], grid_index, n)
+                    kill_info_to_send[grid_index][attacking_coord_rel_to_receiver] = kill_info_to_send[grid_index].get(attacking_coord_rel_to_receiver, 0) + 1
+
+
+
+            _debug_print_arrived(3.1)
+
+            attack_and_kill_info_to_send = {i: {} for i in range(8)}
+            for i in range(8):
+                for attacker_unit in attack_info_to_send[i]:
+                    attack_and_kill_info_to_send[i][attacker_unit] = kill_info_to_send[i].get(attacker_unit, 0)
+
+            incoming_kill_info = communicate(attack_and_kill_info_to_send, rank, num_workers, comm)
+
+            for i in range(8):
+                for attacker_coords, kill_count in incoming_kill_info[i].items():
+                    attacker = worker_grid.get(attacker_coords[0], attacker_coords[1])
+                    attacker.did_attack = True
+                    attacker.kill_count += kill_count
+
+            _debug_print_arrived(3.2)
+
+            # increase attack of fire units
+            for fire_unit in worker_grid.fire_units:
+                if fire_unit.kill_count > 0 and fire_unit.attack < FIRE_ATTACK + 6:
+                    fire_unit.attack += 1
+
+            # reset per-round data
+            for unit in all_owned_units:
+                unit.damage_to_be_taken = 0
+                unit.units_that_attacked_me = []
+                unit.kill_count = 0
+                if unit.health <= 0:
+                    worker_grid.set(unit[0], unit[1], EMPTY_UNIT)
 
 
             # 4) healing phase
-                # add "did_attack" parameter to units, if a unit didn't attack, heal
+            _debug_print_arrived(4.0)
+
+            for unit in all_owned_units:
+                if unit.did_attack is False:
+                    unit.health = min(unit.health + unit.heal_rate, unit.max_health)
 
 
+        # reset per-wave data (attack of fire units)
 
-        # reset the attack of fire units
+        for fire_unit in worker_grid.fire_units:
+            fire_unit.attack = FIRE_ATTACK
+
 
         # clone waters to appropriate places
 
+        boundaries_to_send = [[] for _ in range(8)]
+
+        for i in range(8):
+            top = i in {0, 1, 2}
+            bottom = i in {5, 6, 7}
+            left = i in {0, 3, 5}
+            right = i in {2, 4, 7}
+
+            if top or bottom:
+                row = 0 if top else n - 1  # Top row or bottom row
+                if left:
+                    boundaries_to_send[i].append(worker_grid.get(row, 0))
+                elif right:
+                    boundaries_to_send[i].append(worker_grid.get(row, n - 1))
+                else:
+                    # Add the entire row
+                    boundaries_to_send[i].extend(worker_grid.get(row, j) for j in range(n))
+            else:
+                # Middle rows for left and right
+                if left:
+                    boundaries_to_send[i].extend(worker_grid.get(j, 0) for j in range(n))
+                if right:
+                    boundaries_to_send[i].extend(worker_grid.get(j, n - 1) for j in range(n))
+
+
+        boundaries_received = communicate(boundaries_to_send, rank, num_workers, comm)
+
+        _debug_print_arrived(5.1)
+
+        spawn_locations = set()
+
+        for water_coord, water_unit in worker_grid.water_units:
+
+            row = water_coord[0]
+            col = water_coord[1]
+
+            cell_to_spawn = EMPTY_UNIT
+            spawn_row = 0
+            spawn_col = 0
+
+            for drow in [-1, 0, 1]:
+                for dcol in [-1, 0, 1]:
+
+                    if cell_to_spawn != EMPTY_UNIT:
+                        break
+
+                    if drow == 0 and dcol == 0:
+                        continue
+                    new_row = row + drow
+                    new_col = col + dcol
+                    if new_row == -1 or new_row == n:
+                        offset = 0 if new_row == -1 else 5
+                        if new_col == -1:
+                            cell_to_spawn = boundaries_received[offset + 0][0]
+                        elif new_col == n:
+                            cell_to_spawn = boundaries_received[offset + 2][0]
+                        else:
+                            cell_to_spawn = boundaries_received[offset + 1][new_col]
+                    elif new_col == -1 or new_col == n:
+                        offset = 0 if new_col == -1 else 1
+                        cell_to_spawn = boundaries_received[new_row][offset + 3]
+
+                    else: # completely inside
+                        cell_to_spawn = worker_grid.get(new_row, new_col)
+
+                    if cell_to_spawn == EMPTY_UNIT:
+                        spawn_locations.add((new_row, new_col))
+                        spawn_row = new_row
+                        spawn_col = new_col
+                        break
+
+            if 0 <= spawn_row < n and 0 <= spawn_col < n:
+                spawn_locations.add((spawn_row, spawn_col))
+                continue
+
+            # send to the appropriate neighbor grid otherwise
+            spawns_to_send = [[] for _ in range(8)]
+
+            grid_index = get_grid_index(spawn_row, spawn_col, n)
+            spawn_row_rel_to_receiver = coords_relative_to_grid_index(spawn_row, spawn_col, grid_index, n)
+            spawn_col_rel_to_receiver = coords_relative_to_grid_index(spawn_row, spawn_col, grid_index, n)
+
+            spawns_to_send[grid_index].append((spawn_row_rel_to_receiver, spawn_col_rel_to_receiver))
+
+            new_water_spawns = communicate(spawns_to_send, rank, num_workers, comm)
+
+            for new_water_spawn in new_water_spawns:
+                spawn_locations.add(new_water_spawn)
+
+        for water_spawns in spawn_locations:
+            worker_grid.set(water_spawns[0], water_spawns[1], init_water())
+
+        _debug_print_arrived(5.2)
+
         # send data back to manager
+
+        comm.send(worker_grid, dest=0)
+
+        _debug_print_arrived("END")
 
     if rank == 0:
         input_file.close()
         output_file.close()
-    # cleanup
