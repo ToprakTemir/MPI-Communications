@@ -399,6 +399,8 @@ def coords_relative_to_grid_index(row, col, grid_index, n):
         return row - n, col
     elif grid_index == 7:
         return row - n, col - n
+    elif grid_index == 10:
+        return row, col
     else:
         return -1, -1
 
@@ -510,7 +512,6 @@ def count_attackable_enemies(extended_grid, coord):
                     grid_i = 4
                 if extended_grid.grids[grid_i] is not None and -n <= row < 2*n and -n <= col < 2*n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                     count += 1
-    print(f"Counted {count} attackable enemies from {coord}", flush=True)
     return count
 
 def merge_air_units(air1, air2):
@@ -615,7 +616,6 @@ if __name__ == "__main__":
 
             # _debug_print_arrived(0)
 
-            print(main_grid.air_units, flush=True)
             for worker_rank in range(1, num_workers + 1):
 
                 # these worker x, y values are the x, y values of processors in the processor-grid
@@ -653,13 +653,16 @@ if __name__ == "__main__":
 
 
     else: # worker
-        i = 1
+        wave_count = 1
         while True:
-            print(f"Wave {i}:")
 
             worker_grid, N, n, num_rounds_per_wave = comm.recv(source=0)
             if worker_grid == "Kill":
                 break
+
+            print(f"Wave {wave_count}:")
+            wave_count += 1
+
 
             # process the rounds
 
@@ -747,6 +750,9 @@ if __name__ == "__main__":
 
                 attacker_and_dest_to_send = [[] for _ in range(8)]
                 for coord, unit in all_owned_units:
+
+                    if unit.health < unit.max_health / 2:
+                        continue
 
                     # air units, which needs extra check for the extra attack length
                     if unit.type == 'A':
@@ -887,7 +893,7 @@ if __name__ == "__main__":
 
 
                 # 4) healing phase
-                _debug_print_arrived(4.0)
+                # _debug_print_arrived(4.0)
 
                 for _, unit in all_owned_units:
                     if unit.did_attack is False:
@@ -934,7 +940,7 @@ if __name__ == "__main__":
 
             spawn_locations = set()
 
-            for water_coord, water_unit in worker_grid.water_units:
+            for water_coord, water_unit in worker_grid.water_units.items():
 
                 row = water_coord[0]
                 col = water_coord[1]
@@ -956,14 +962,18 @@ if __name__ == "__main__":
                         if new_row == -1 or new_row == n:
                             offset = 0 if new_row == -1 else 5
                             if new_col == -1:
-                                cell_to_spawn = boundaries_received[offset + 0][0]
+                                if boundaries_received[offset + 0] is not None:
+                                    cell_to_spawn = boundaries_received[offset + 0][0]
                             elif new_col == n:
-                                cell_to_spawn = boundaries_received[offset + 2][0]
+                                if boundaries_received[offset + 2] is not None:
+                                    cell_to_spawn = boundaries_received[offset + 2][0]
                             else:
-                                cell_to_spawn = boundaries_received[offset + 1][new_col]
+                                if boundaries_received[offset + 1] is not None:
+                                    cell_to_spawn = boundaries_received[offset + 1][new_col]
                         elif new_col == -1 or new_col == n:
                             offset = 0 if new_col == -1 else 1
-                            cell_to_spawn = boundaries_received[new_row][offset + 3]
+                            if boundaries_received[new_row] is not None:
+                                cell_to_spawn = boundaries_received[new_row][offset + 3]
 
                         else: # completely inside
                             cell_to_spawn = worker_grid.get(new_row, new_col)
@@ -990,6 +1000,8 @@ if __name__ == "__main__":
                 new_water_spawns = communicate(spawns_to_send, rank, num_workers, comm)
 
                 for new_water_spawn in new_water_spawns:
+                    if new_water_spawn is None:
+                        continue
                     spawn_locations.add(new_water_spawn)
 
             for water_spawns in spawn_locations:
