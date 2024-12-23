@@ -945,44 +945,56 @@ if __name__ == "__main__":
                 row = water_coord[0]
                 col = water_coord[1]
 
-                cell_to_spawn = EMPTY_UNIT
-                spawn_row = -999999
-                spawn_col = -999999
+                cell_to_spawn = None
+                spawn_row = None
+                spawn_col = None
+
+                break_loop = False
 
                 for drow in [-1, 0, 1]:
-                    for dcol in [-1, 0, 1]:
 
-                        if cell_to_spawn != EMPTY_UNIT:
-                            break
+                    if break_loop:
+                        break
+
+                    for dcol in [-1, 0, 1]:
 
                         if drow == 0 and dcol == 0:
                             continue
                         new_row = row + drow
                         new_col = col + dcol
-                        if new_row == -1 or new_row == n:
-                            offset = 0 if new_row == -1 else 5
+
+                        if new_row == -1:
                             if new_col == -1:
-                                if boundaries_received[offset + 0] is not None:
-                                    cell_to_spawn = boundaries_received[offset + 0][0]
+                                cell_to_spawn = boundaries_received[0][0] if boundaries_received[0] is not None else None
                             elif new_col == n:
-                                if boundaries_received[offset + 2] is not None:
-                                    cell_to_spawn = boundaries_received[offset + 2][0]
+                                cell_to_spawn = boundaries_received[2][0] if boundaries_received[2] is not None else None
                             else:
-                                if boundaries_received[offset + 1] is not None:
-                                    cell_to_spawn = boundaries_received[offset + 1][new_col]
-                        elif new_col == -1 or new_col == n:
-                            offset = 0 if new_col == -1 else 1
-                            if boundaries_received[new_row] is not None:
-                                cell_to_spawn = boundaries_received[new_row][offset + 3]
+                                cell_to_spawn = boundaries_received[1][new_col] if boundaries_received[1] is not None else None
+                        elif new_row == n:
+                            if new_col == -1:
+                                cell_to_spawn = boundaries_received[5][0] if boundaries_received[5] is not None else None
+                            elif new_col == n:
+                                cell_to_spawn = boundaries_received[7][0] if boundaries_received[7] is not None else None
+                            else:
+                                cell_to_spawn = boundaries_received[6][new_col] if boundaries_received[6] is not None else None
+                        else:
+                            if new_col == -1:
+                                cell_to_spawn = boundaries_received[3][new_row] if boundaries_received[3] is not None else None
+                            elif new_col == n:
+                                cell_to_spawn = boundaries_received[4][new_row] if boundaries_received[4] is not None else None
+                            else:
+                                # completely inside
+                                cell_to_spawn = worker_grid.get(new_row, new_col)
 
-                        else: # completely inside
-                            cell_to_spawn = worker_grid.get(new_row, new_col)
-
-                        if cell_to_spawn == EMPTY_UNIT:
+                        if cell_to_spawn.type == "Empty":
                             spawn_locations.add((new_row, new_col))
                             spawn_row = new_row
                             spawn_col = new_col
+                            break_loop = True
                             break
+
+                if spawn_row is None or spawn_col is None:
+                    continue
 
                 if 0 <= spawn_row < n and 0 <= spawn_col < n:
                     spawn_locations.add((spawn_row, spawn_col))
@@ -1005,6 +1017,7 @@ if __name__ == "__main__":
                     spawn_locations.add(new_water_spawn)
 
             for water_spawns in spawn_locations:
+                print(water_spawns)
                 worker_grid.set(water_spawns[0], water_spawns[1], init_water())
 
             # _debug_print_arrived(5.2)
