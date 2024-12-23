@@ -358,7 +358,6 @@ class ExtendedGrid:
         bottom = row >= n
 
         ret = None
-
         if left and top:
             ret = self.grids[0].get(row + n, col + n)
         elif right and top:
@@ -511,6 +510,7 @@ def count_attackable_enemies(extended_grid, coord):
                     grid_i = 4
                 if extended_grid.grids[grid_i] is not None and -n <= row < 2*n and -n <= col < 2*n and extended_grid.get(row, col).type != "Empty" and extended_grid.get(row, col).type != 'A':
                     count += 1
+    print(f"Counted {count} attackable enemies from {coord}", flush=True)
     return count
 
 def merge_air_units(air1, air2):
@@ -770,7 +770,7 @@ if __name__ == "__main__":
                             # send attack data to neighbor grid
                             grid_index = get_grid_index(far_attack_coord[0], far_attack_coord[1], n)
 
-                            
+
 
                             coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
                             far_coord_rel_to_receiver = coords_relative_to_grid_index(far_attack_coord[0], far_attack_coord[1], grid_index, n)
@@ -871,7 +871,7 @@ if __name__ == "__main__":
                 # _debug_print_arrived(3.2)
 
                 # increase attack of fire units
-                for fire_coord, fire_unit in worker_grid.fire_units.items():
+                for fire_unit in worker_grid.fire_units.values():
                     if fire_unit.kill_count > 0 and fire_unit.attack < FIRE_ATTACK + 6:
                         fire_unit.attack += 1
 
@@ -897,7 +897,7 @@ if __name__ == "__main__":
 
             # reset per-wave data (attack of fire units)
 
-            for fire_coords, fire_unit in worker_grid.fire_units.items():
+            for fire_unit in worker_grid.fire_units.values():
                 fire_unit.attack = FIRE_ATTACK
 
 
