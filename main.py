@@ -381,21 +381,21 @@ def coords_relative_to_grid_index(row, col, grid_index, n):
     """
 
     if grid_index == 0:
-        return row - n, col - n
-    elif grid_index == 1:
-        return row - n, col
-    elif grid_index == 2:
-        return row - n, col + n
-    elif grid_index == 3:
-        return row, col - n
-    elif grid_index == 4:
-        return row, col
-    elif grid_index == 5:
-        return row + n, col - n
-    elif grid_index == 6:
-        return row + n, col
-    elif grid_index == 7:
         return row + n, col + n
+    elif grid_index == 1:
+        return row + n, col
+    elif grid_index == 2:
+        return row + n, col - n
+    elif grid_index == 3:
+        return row, col + n
+    elif grid_index == 4:
+        return row, col - n
+    elif grid_index == 5:
+        return row - n, col + n
+    elif grid_index == 6:
+        return row - n, col
+    elif grid_index == 7:
+        return row - n, col - n
     else:
         return -1, -1
 
@@ -427,7 +427,7 @@ def get_grid_index(row, col, n):
     elif right:
         return 4
     else:
-        return -1
+        raise ValueError(f"The given coordinates {row, col} are not on the border of the grid.")
 
 def handle_air_movement(extended_grid):
     """
@@ -759,9 +759,9 @@ if __name__ == "__main__":
 
                         grid_index = get_grid_index(attack_coord[0], attack_coord[1], n)
                         coord_rel_to_receiver = coords_relative_to_grid_index(coord[0], coord[1], grid_index, n)
-                        far_coord_rel_to_receiver = coords_relative_to_grid_index(attack_coord[0], attack_coord[1], grid_index, n)
+                        attack_coord_rel_to_receiver = coords_relative_to_grid_index(attack_coord[0], attack_coord[1], grid_index, n)
                         attacker_and_dest_to_send[grid_index].append(
-                            (unit, coord_rel_to_receiver, far_coord_rel_to_receiver)
+                            (unit, coord_rel_to_receiver, attack_coord_rel_to_receiver)
                         )
 
                 _debug_print_arrived(2.1)
@@ -776,7 +776,7 @@ if __name__ == "__main__":
                         continue
 
                     for attacking_unit, attacking_coord, attacked_coord in incoming_attacks[i]:
-                        print("AAA" + str(attacking_unit), str(attacking_coord), str(attacked_coord), flush=True)
+                        print("AAA " + str(attacking_unit), str(attacking_coord), str(attacked_coord), flush=True)
                         attacked_pixel = worker_grid.get(attacked_coord[0], attacked_coord[1])
                         if attacked_pixel.type != "Empty" and attacked_pixel.type != attacking_unit:
 
@@ -820,7 +820,7 @@ if __name__ == "__main__":
 
 
 
-                # _debug_print_arrived(3.1)
+                _debug_print_arrived(3.1)
 
                 attack_and_kill_info_to_send = {i: {} for i in range(8)}
                 for i in range(8):
@@ -838,7 +838,7 @@ if __name__ == "__main__":
                         attacker.did_attack = True
                         attacker.kill_count += kill_count
 
-                # _debug_print_arrived(3.2)
+                _debug_print_arrived(3.2)
 
                 # increase attack of fire units
                 for fire_unit in worker_grid.fire_units:
@@ -858,7 +858,7 @@ if __name__ == "__main__":
                 print(str(worker_grid), flush=True)
 
                 # 4) healing phase
-                # _debug_print_arrived(4.0)
+                _debug_print_arrived(4.0)
 
                 for _, _, unit in all_owned_units:
                     if unit.did_attack is False:
